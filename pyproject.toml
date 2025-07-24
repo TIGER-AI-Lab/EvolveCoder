@@ -1,0 +1,23 @@
+[project]
+name = "acecoderv2"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "acecoder",
+    "datasets>=4.0.0",
+    "fire>=0.7.0",
+    "openai>=1.97.1",
+    "pyext>=0.7",
+    "transformers>=4.53.3",
+    "vllm>=0.9.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["acecoderv2"]
+exclude = ["tests*", "eval"]
+
+[tool.uv.sources]
+acecoder = { git = "https://github.com/TIGER-AI-Lab/AceCoder.git", rev = "dev" }
