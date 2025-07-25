@@ -27,12 +27,24 @@ def print_statistics(data, pass_rates, test_cases_pass_status):
     
     # Pass rate statistics
     pass_rates_array = np.array(pass_rates)
+    pass_rates_per_problem_array = pass_rates_array.reshape(total_problems, -1)
     print(f"\n🎯 Pass Rate Statistics:")
     print(f"   Mean pass rate: {pass_rates_array.mean():.4f} ({pass_rates_array.mean()*100:.2f}%)")
     print(f"   Median pass rate: {np.median(pass_rates_array):.4f} ({np.median(pass_rates_array)*100:.2f}%)")
     print(f"   Std deviation: {pass_rates_array.std():.4f}")
     print(f"   Min pass rate: {pass_rates_array.min():.4f} ({pass_rates_array.min()*100:.2f}%)")
     print(f"   Max pass rate: {pass_rates_array.max():.4f} ({pass_rates_array.max()*100:.2f}%)")
+
+    # print pass@k until solutions, from 1, 2, 4, ..
+    print(f"\n📈 Pass@k Statistics:")
+    k = 1
+    while k < solutions_per_problem:
+        pass_at_k = (pass_rates_per_problem_array[:, :k] == 1.0).any(axis=1).mean()
+        print(f"   Pass@{k}: {pass_at_k:.4f} ({pass_at_k*100:.2f}%)")
+        k *= 2
+    pass_at_k = (pass_rates_per_problem_array == 1.0).any(axis=1).mean()
+    print(f"   Pass@{solutions_per_problem}: {pass_at_k:.4f} ({pass_at_k*100:.2f}%)")
+    print(f"   Total solutions with pass rate 1.0: {np.sum(pass_rates_array == 1.0)}")
     
     # Percentiles
     percentiles = [25, 50, 75, 90, 95, 99]
@@ -68,7 +80,7 @@ def print_statistics(data, pass_rates, test_cases_pass_status):
     problem_worst_pass_rates = []
     
     for i, item in enumerate(data):
-        num_solutions = len(item['gen_result']['outputs'])
+        num_solutions = len(item['gen_result']['eval_results'])
         problem_rates = pass_rates[idx:idx+num_solutions]
         
         avg_rate = np.mean(problem_rates)
@@ -226,8 +238,17 @@ def main(
     new_file_name = Path(file_path).stem.replace(LAST_STEP_NAME, FILE_NAME)
     output_file = output_dir / f"{new_file_name}.jsonl"
     
-    if output_file.exists() and not output_file.stat().st_size and not overwrite:
+    if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
+        pass_rates = []
+        test_cases_pass_status = []
+        with open(output_file, 'r') as f:
+            data = [json.loads(line) for line in f.readlines()]
+        for item in data:
+            for eval_result in item['gen_result']['eval_results']:
+                pass_rates.append(eval_result['pass_rate'])
+                test_cases_pass_status.append(eval_result['test_cases_pass_status'])
+        print_statistics(data, pass_rates, test_cases_pass_status)
         return
 
     print(f"🔄 Loading data from: {file_path}")
@@ -260,7 +281,11 @@ def main(
     })
     
     def parse_code_func(item):
-        item['parse_code'] = item['solution_str']
+        thinking_end_idx = item['solution_str'].find("</think>")
+        if thinking_end_idx != -1:
+            item['parse_code'] = item['solution_str'][thinking_end_idx + len("</think>"):]
+        else:
+            item['parse_code'] = item['solution_str']
         return item
     
     dataset = dataset.map(parse_code_func, num_proc=num_proc, desc="Parsing code")
@@ -278,32 +303,40 @@ def main(
     idx = 0
     for item in data:
         item['gen_result']['eval_results'] = []
+        test_case_diversity_arr = []
         for _ in range(len(item['gen_result']['outputs'])):
             item['gen_result']['eval_results'].append({
                 'pass_rate': pass_rates[idx],
                 'test_cases_pass_status': test_cases_pass_status[idx],
                 'parse_code': dataset['parse_code'][idx]
             })
+            item['gen_result'].pop('outputs', None)  # Remove outputs to save space
+            test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
             idx += 1
+        test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
+        item['gen_result']['test_case_diversity'] = {
+            "arr": test_case_diversity_arr,
+            "mean": np.mean(test_case_diversity_arr, axis=1).tolist(),
+        }
 
-    # Print comprehensive statistics
-    print_statistics(data, pass_rates, test_cases_pass_status)
-        
-    # Save output data
+     # Save output data
     print(f"💾 Saving results to: {output_file}")
     with open(output_file, 'w') as f:
         for item in data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
     # with open(output_file.with_suffix('.json'), 'w') as f:
     #     json.dump(data, f, indent=4, ensure_ascii=False)
-    
     print(f"✅ Results saved to {output_file}")
-
+    
+    # Print comprehensive statistics
+    print_statistics(data, pass_rates, test_cases_pass_status)
+    
 if __name__ == "__main__":
     fire.Fire(main)
 
 """
 python step2.2_eval.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step2.1_gen_Qwen2_vllm_seed42_0_50.jsonl
 python step2.2_eval.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step2.1_gen_gpt_4.1_mini_vllm_seed42_0_50.jsonl
+python step2.2_eval.py outputs/Magicoder_Evol_Instruct_110K/o4_mini/step2.1_gen_Qwen3_8B_seed42.jsonl --overwrite True
 """
 

@@ -2,12 +2,14 @@
 set -e
 # Parameters
 DATASET_NAME="ise-uiuc/Magicoder-Evol-Instruct-110K"
-MAX_SAMPLES=20 # set to 0 for all samples
+MAX_SAMPLES=100 # set to 0 for all samples
 MODEL_NAME="o4-mini"
-SAVE_BATCH_SIZE=5
+SAVE_BATCH_SIZE=25
 MAX_CONCURRENT=25
-GEN_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-TENSOR_PARALLEL_SIZE=2
+# GEN_MODEL="Qwen/Qwen3-8B"
+GEN_MODEL="gpt-4.1-mini"
+USE_VLLM=False
+TENSOR_PARALLEL_SIZE=4
 TOP_P=0.95
 TOP_K=1
 TEMPERATURE=0.6
@@ -40,11 +42,21 @@ python step1_prompting.py --dataset_name $DATASET_NAME --max_samples $MAX_SAMPLE
 
 python step1.1_parsing.py --file_path $STEP1_OUTPUT
 
-python step2.1_vllm_gen.py $STEP1_1_OUTPUT \
-    --save_batch_size=$SAVE_BATCH_SIZE \
-    --model_name_or_path=$GEN_MODEL \
-    --tensor_parallel_size=$TENSOR_PARALLEL_SIZE \
-    --overwrite $OVERWRITE \
-    --top_p=$TOP_P --top_k=$TOP_K --temperature=$TEMPERATURE --max_tokens=$MAX_TOKENS --n $N
+# use vllm or openai for generation
+if [ "$USE_VLLM" = true ]; then
+    python step2.1_vllm_gen.py $STEP1_1_OUTPUT \
+        --model_name_or_path=$GEN_MODEL \
+        --overwrite $OVERWRITE \
+        --save_batch_size=$SAVE_BATCH_SIZE \
+        --tensor_parallel_size=$TENSOR_PARALLEL_SIZE \
+        --top_p=$TOP_P --top_k=$TOP_K --temperature=$TEMPERATURE --max_tokens=$MAX_TOKENS --n $N
+else
+    python step2.1_openai_gen.py $STEP1_1_OUTPUT \
+        --model=$GEN_MODEL \
+        --overwrite $OVERWRITE \
+        --batch_size=$SAVE_BATCH_SIZE \
+        --max_concurrent=$MAX_CONCURRENT \
+        --top_p=$TOP_P --temperature=$TEMPERATURE --max_tokens=$MAX_TOKENS --n $N
+fi
 
 python step2.2_eval.py $STEP2_1_OUTPUT --overwrite $OVERWRITE

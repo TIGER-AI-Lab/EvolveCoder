@@ -16,7 +16,7 @@ def preprocess_prompts_auto(data: List[dict]) -> tuple[List[List[dict]], List[st
     """
     messages_list = []
     for item in data:
-        messages = [{"role": "user", "content": item["problem"]}]
+        messages = [{"role": "user", "content": item['synthesis_result']["problem"]}]
         messages_list.append(messages)
     return messages_list
 
@@ -113,7 +113,7 @@ async def main_async(
         cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}_{start_idx}_{end_idx}.cache.jsonl"
         output_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}_{start_idx}_{end_idx}.jsonl"
 
-    if output_file.exists() and not output_file.stat().st_size and not overwrite:
+    if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
         return
     

@@ -87,7 +87,7 @@ def main(
         cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.cache.jsonl"
         output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.jsonl"
 
-    if output_file.exists() and not output_file.stat().st_size and not overwrite:
+    if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
         return
     
