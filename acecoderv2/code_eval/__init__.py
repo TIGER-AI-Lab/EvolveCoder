@@ -14,6 +14,7 @@ import warnings
 
 # Suppress multiprocessing cleanup warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="multiprocessing")
+DEFAULT_NUM_PROCESSES = 64
 
 
 def prime_code_compute_score_async(solution_str:str, test_cases:Union[str, dict]):
@@ -52,7 +53,7 @@ async def single_compute_score(evaluation_func, completion, test_cases, executor
 
 
 async def parallel_compute_score_async(
-    evaluation_func, completions:List[str], test_cases: List[Union[str, dict]], num_processes=64
+    evaluation_func, completions:List[str], test_cases: List[Union[str, dict]], num_processes=DEFAULT_NUM_PROCESSES
 ):
     scores = []
     test_cases_pass_status = []
@@ -97,14 +98,25 @@ async def parallel_compute_score_async(
             test_cases_pass_status.append(result[1])
     return scores, test_cases_pass_status
 
-def get_prime_code_data_score(solution_strs:List[str], test_cases: List[Union[str, dict]], binary:bool=False):
+def get_prime_code_data_score(solution_strs:List[str], test_cases: List[Union[str, dict]], binary:bool=False, num_processes=DEFAULT_NUM_PROCESSES):
+    """ Get the scores for the given solutions and test cases using Prime Code evaluation.
+    Args:
+        solution_strs: List of solution strings.
+        test_cases: List of test case strings (should be lists of assert statements).
+        binary: If True, return binary scores (1.0 or -1.0),
+        num_processes: Number of processes to use for parallel computation.
+    Returns:
+        List of scores for each solution.
+        If binary is True, scores will be 1.0 for passing solutions and 0.0 for failing solutions.
+        If binary is False, scores will be the pass rates.
+    """
     scores = [0. for _ in range(len(solution_strs))]
     pass_rates, test_cases_pass_status = asyncio.run(
         parallel_compute_score_async(
             prime_code_compute_score_async,
             solution_strs,
             test_cases,
-            num_processes=64,
+            num_processes=num_processes
         )
     ) # list of 1.0 or 0.0
     for i in range(len(scores)):
@@ -112,19 +124,23 @@ def get_prime_code_data_score(solution_strs:List[str], test_cases: List[Union[st
             scores[i] = 1.0 if pass_rates[i] == 1.0 else 0.0
         else:
             scores[i] = pass_rates[i]
+    test_cases_pass_status = [
+        {'pass': pass_status, 'reason': None, 'error_message': None}
+        for pass_status in test_cases_pass_status
+    ]
     return scores, test_cases_pass_status
 
-def get_acecoder_data_score(solution_strs: List[str], test_cases: List[Union[str, list]], binary: bool = False):
-    """
-    Get the scores for the given solutions and test cases using AceCoder evaluation.
-    
+def get_acecoder_data_score(solution_strs: List[str], test_cases: List[Union[str, list]], binary: bool = False, num_processes: int = DEFAULT_NUM_PROCESSES):
+    """ Get the scores for the given solutions and test cases using AceCoder evaluation.
     Args:
         solution_strs: List of solution strings.
         test_cases: List of test case strings (should be lists of assert statements).
-        binary: If True, return binary scores (1.0 or -1.0), else return pass rates.
-        
+        binary: If True, return binary scores (1.0 or -1.0),
+        num_processes: Number of processes to use for parallel computation.
     Returns:
         List of scores for each solution.
+        If binary is True, scores will be 1.0 for passing solutions and 0.0 for failing solutions.
+        If binary is False, scores will be the pass rates.
     """
     samples = [
         {
@@ -136,44 +152,41 @@ def get_acecoder_data_score(solution_strs: List[str], test_cases: List[Union[str
         for i, (solution_str, test_case) in enumerate(zip(solution_strs, test_cases))
     ]
     results, pass_dates = evaluate_test_cases(
-        samples, n_workers=64, extract_solution=True, test_details=True, i_just_wanna_run=True, min_time_limit=1, gt_time_limit_factor=1
+        samples, n_workers=num_processes, extract_solution=True, test_details=True, i_just_wanna_run=True, min_time_limit=1, gt_time_limit_factor=1
     )
-    with open("./test.json", 'w') as f:
-        json.dump(results, f, indent=4)
-    print(pass_dates)
-    print(results)
 
     if binary:
         scores = [1.0 if res['eval_results']['pass_rate'] == 1.0 else 0 for res in results]
     else:
         scores = [res['eval_results']['pass_rate'] for res in results]
     test_cases_pass_status = [
-        [detail['pass'] for detail in res['eval_results']['details']] for res in results
+        [detail for detail in res['eval_results']['details']] for res in results
     ]
     return scores, test_cases_pass_status
 
-def eval_codes(solution_strs:List[str], test_cases: List[Union[str, dict, list]], binary: bool = False, return_test_cases_pass_status: bool = False):
+def eval_codes(solution_strs:List[str], test_cases: List[Union[str, dict, list]], num_processes: int = DEFAULT_NUM_PROCESSES, binary: bool = False, return_test_cases_pass_status: bool = False):
     test_cases = [json.loads(test_case) if isinstance(test_case, str) else test_case for test_case in test_cases]
     prime_idxs = []
     acecoder_idxs = []
     for idx in range(len(solution_strs)):
-        if isinstance(test_cases[idx], list) and all(['assert' in test_case for test_case in test_cases[idx]]):
+        if isinstance(test_cases[idx], list):
             acecoder_idxs.append(idx)
         else:
             prime_idxs.append(idx)
+    print(f"Prime Code samples: {len(prime_idxs)}, AceCoder samples: {len(acecoder_idxs)}")
     prime_scores = []
     acecoder_scores = []
     if prime_idxs:
         prime_scores, test_cases_pass_status = get_prime_code_data_score(
             [solution_strs[idx] for idx in prime_idxs],
             [test_cases[idx] for idx in prime_idxs],
-            binary=binary
+            binary=binary, num_processes=num_processes
         )
     if acecoder_idxs:
         acecoder_scores, test_cases_pass_status = get_acecoder_data_score(
             [solution_strs[idx] for idx in acecoder_idxs],
             [test_cases[idx] for idx in acecoder_idxs],
-            binary=binary
+            binary=binary, num_processes=num_processes
         )
     scores = [0.0] * len(solution_strs)
     for idx, score in zip(prime_idxs, prime_scores):

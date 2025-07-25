@@ -65,12 +65,3 @@ def parse_code(action: str, mode="all"):
     
     parsed_code = parsed_code.strip(' \n')
     return parsed_code
-
-def prime_code_compute_score_async(data_source, solution_str, ground_truth, extra_info=None):
-    res = prime_code_compute_score(solution_str, ground_truth, continuous=True)
-    if isinstance(res, dict):
-        return res
-    elif isinstance(res, (int, float, bool)):
-        return float(res)
-    else:
-        return float(res[0])

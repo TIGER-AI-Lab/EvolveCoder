@@ -17,11 +17,24 @@ from acecoderv2.synthesizer.utils import (
 )
 
 FILE_NAME = Path(__file__).stem
-default_output_dir = Path(__file__).parent / "outputs" / FILE_NAME
+ERROR_QUESTION = "Error in question generation"
+ERROR_TESTS = ["assert False"]
+
+def filter_parsed_items(item):
+    """
+    Filter function to check if the item has 'gpt_response' and 'tests'.
+    """
+    gpt_response = item['synthesis_result'].get('gpt_response', None)
+    tests = item['synthesis_result'].get('tests', None)
+    if gpt_response and gpt_response != ERROR_QUESTION and tests and tests != ERROR_TESTS:
+        return True
+    return False
+
 def main(
     file_path: str,
     num_proc: int = 1,
     output_dir: str = None,
+    do_filter: bool = True,
 ):
     """
     Main function to generate test cases for a given dataset.
@@ -29,30 +42,29 @@ def main(
     :param ct: Number of test cases to generate.
     """
     assert os.path.exists(file_path), f"File {file_path} does not exist."
-    
-    output_dir = Path(output_dir) if output_dir else default_output_dir
-    output_file = output_dir / f"{Path(file_path).stem}.jsonl"
+    output_dir = output_dir or Path(file_path).parent
+    output_file = output_dir / f"{FILE_NAME}.jsonl"
 
     dataset = datasets.Dataset.from_json(file_path)
 
     def parsing_item(item):
-        gpt_response = item.get('gpt_response', None)
+        gpt_response = item['synthesis_result'].get('gpt_response', None)
         
         # parse the response
         try:
             obj = parse_incomplete_json(gpt_response)
-            question = obj.get("question", "please ignore this question")
+            question = obj.get("question", ERROR_QUESTION)
             question = json.dumps(question, ensure_ascii=False) if not isinstance(question, str) else question
-            tests = obj.get("tests", ["assert False"])
+            tests = obj.get("tests", ERROR_TESTS)
         except Exception as e:
             print(f"Error parsing response: {e}")
-            question = "Error in question generation"
-            tests = ["assert False"]
+            question = ERROR_QUESTION
+            tests = ERROR_TESTS
         
-        item['gpt_question'] = question
-        item['tests'] = tests
-        print("gpt_question:", type(item['gpt_question']))
-        print("tests:", type(item['tests']))
+        item['synthesis_result']['problem'] = question
+        item['synthesis_result']['tests'] = tests
+        # print("gpt_question:", type(item['gpt_question']))
+        # print("tests:", type(item['tests']))
         return item
     
     # Process the dataset in parallel
@@ -61,6 +73,14 @@ def main(
         num_proc=num_proc,
         desc="Parsing dataset",
     )
+    if do_filter:
+        print(f"Before filtering, dataset size: {len(dataset)}")
+        dataset = dataset.filter(
+            filter_parsed_items,
+            num_proc=num_proc,
+            desc="Filtering parsed items",
+        )
+        print(f"After filtering, dataset size: {len(dataset)}")
     # Save the processed dataset
     dataset.to_json(output_file, orient="records", lines=True)
     print(f"Processed dataset saved to {output_file}")
@@ -72,6 +92,6 @@ if __name__ == "__main__":
 This code is part of the AceCoderV2 project, which is designed to generate challenging LeetCode-style questions and test cases from code snippets using OpenAI's GPT models. The main function orchestrates the preprocessing of datasets, generation of test cases, and saving the results to a specified output directory. It supports parallel processing for efficiency and allows for caching of previous responses to avoid redundant API calls.
 Usage:
 ```bash
-python step1.1_parsing.py --file_path outputs/step1_prompting/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl --num_proc 1
+python step1.1_parsing.py --file_path outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1_prompting_results.jsonl --num_proc 1
 ```
 """

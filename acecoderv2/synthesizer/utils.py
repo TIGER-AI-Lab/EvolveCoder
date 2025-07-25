@@ -173,8 +173,23 @@ def hash_messages(messages: Union[str, List[Dict[str, Any]]]) -> str:
     return hash_obj.hexdigest()
 
 
-
 def pretty_name(name: str) -> str:
+    """
+    Convert a name to a pretty name by extracting the last part after '/' and replacing '-' with '_'.
+    
+    Args:
+        name (str): The original model or dataset name/path
+        
+    Returns:
+        str: A cleaned name with last part after '/' and '-' replaced with '_'
+    """
+    # Extract part after last '/'
+    name = name.split('/')[-1]
+    # Replace '-' with '_'
+    name = name.replace('-', '_')
+    return name
+
+def complex_pretty_name(name: str) -> str:
     """
     Convert a name to a pretty name of model name/path or dataset name/path to serve as file name.
     

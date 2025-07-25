@@ -17,7 +17,7 @@ from acecoderv2.synthesizer.utils import (
     hash_messages,
     pretty_name
 )
-from openai import OpenAI
+from acecoderv2.synthesizer.openai_utils import generate_with_retry, OpenAIAsyncClient
 
 PROMPT_TEMPLATE_RAW = """system:
 You are the latest and best bot aimed at transforming some code snippet into a very challenging LeetCode-style question intended for advanced CS university students and experienced software engineers. You will be provided with a prompt for writing code, along with a reference program that attempts to answer the question. Please complete the following for me:
@@ -93,139 +93,6 @@ Here is the reference program:
 Now give your modified question and generated test cases in the following json format: 
 {{"question": ..., "tests":["assert ...", "assert ..."]}}.
 """
-class OpenAIAsyncClient:
-    """
-    Async OpenAI client using aiohttp for better control and performance.
-    """
-    
-    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1"):
-        self.api_key = api_key
-        self.base_url = base_url.rstrip('/')
-        self.session = None
-        
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=300),  # 5 minute timeout
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        )
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    async def chat_completion(
-        self,
-        messages: List[dict],
-        model: str,
-        max_tokens: int = 4000,
-        temperature: float = 0.7,
-        top_p: float = 1.0,
-        seed: Optional[int] = None,
-    ) -> str:
-        """
-        Send a chat completion request to OpenAI API.
-        """
-        url = f"{self.base_url}/chat/completions"
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "max_completion_tokens": max_tokens,
-            "temperature": temperature,
-            "top_p": top_p,
-        }
-        
-        if seed is not None:
-            payload["seed"] = seed
-        
-        async with self.session.post(url, json=payload) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data["choices"][0]["message"]["content"]
-            else:
-                error_text = await response.text()
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"OpenAI API error: {error_text}"
-                )
-
-
-async def generate_with_retry(
-    client: OpenAIAsyncClient,
-    messages: List[dict],
-    model: str,
-    max_tokens: int,
-    temperature: float = 0.7,
-    top_p: float = 1.0,
-    seed: Optional[int] = None,
-    max_retries: int = 3,
-    retry_delay: float = 1.0,
-    semaphore: asyncio.Semaphore = None,
-) -> str:
-    """
-    Generate response with retry logic for handling rate limits and errors.
-    """
-    async def _make_request():
-        for attempt in range(max_retries):
-            try:
-                response = await client.chat_completion(
-                    messages=messages,
-                    model=model,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    seed=seed
-                )
-                return response
-            except aiohttp.ClientResponseError as e:
-                if e.status == 429:  # Rate limit
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)
-                        print(f"Rate limit hit, waiting {wait_time:.1f}s before retry {attempt + 2}/{max_retries}")
-                        await asyncio.sleep(wait_time)
-                        continue
-                    else:
-                        return f"ERROR: Rate limit exceeded after {max_retries} attempts"
-                elif e.status >= 500:  # Server error
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)
-                        print(f"Server error {e.status}, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                        await asyncio.sleep(wait_time)
-                        continue
-                    else:
-                        return f"ERROR: Server error {e.status} after {max_retries} attempts"
-                else:
-                    return f"ERROR: HTTP {e.status} - {str(e)}"
-            except asyncio.TimeoutError:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)
-                    print(f"Request timeout, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                    await asyncio.sleep(wait_time)
-                    continue
-                else:
-                    return f"ERROR: Timeout after {max_retries} attempts"
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)
-                    print(f"Unexpected error: {e}, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                    await asyncio.sleep(wait_time)
-                    continue
-                else:
-                    return f"ERROR: {str(e)}"
-        
-        return "ERROR: All retry attempts failed"
-    
-    if semaphore:
-        async with semaphore:
-            return await _make_request()
-    else:
-        return await _make_request()
 
 
 def preprocess_dataset(dataset_name: str, max_sample=None, num_proc=4) -> datasets.Dataset:
@@ -247,7 +114,7 @@ def preprocess_dataset(dataset_name: str, max_sample=None, num_proc=4) -> datase
             dataset_name,
             split="train",
         )
-        if max_sample is not None:
+        if max_sample is not None and max_sample > 0:
             dataset = dataset.select(range(max_sample))
         
         def process_item(item, idx):
@@ -311,21 +178,17 @@ def preprocess_dataset(dataset_name: str, max_sample=None, num_proc=4) -> datase
     raise ValueError(f"Dataset {dataset_name} is not supported for preprocessing.")
 
 
-FILE_NAME = Path(__file__).stem
-default_output_dir = Path(__file__).parent / "outputs" / FILE_NAME
-default_cache_dir = Path(__file__).parent / "outputs" / FILE_NAME / "cache"
-
 
 async def process_batch_async(
     client: OpenAIAsyncClient,
     batch_items: List[dict],
     model_name: str,
     max_tokens: int,
-    cached_data: dict,
     cache_file: Path,
     max_concurrent: int = 10,
     max_retries: int = 3,
     retry_delay: float = 1.0,
+    **kwargs
 ) -> List[dict]:
     """
     Process a batch of items asynchronously.
@@ -345,54 +208,45 @@ async def process_batch_async(
             )
         
         messages = [{"role": "user", "content": prompt}]
-        hash_id = hash_messages(messages)
         
-        # Check cache first
-        if hash_id in cached_data:
-            response = cached_data[hash_id]['response']
-        else:
-            # Generate new response
-            response = await generate_with_retry(
-                client=client,
-                messages=messages,
-                model=model_name,
-                max_tokens=max_tokens,
-                max_retries=max_retries,
-                retry_delay=retry_delay,
-                semaphore=semaphore
-            )
-            
-            # Cache the result
-            cache_item = {
-                'hash_id': hash_id,
-                'response': response
-            }
-            cached_data[hash_id] = cache_item
-            append_jsonl(cache_file, cache_item)
+        # Generate new response
+        response = await generate_with_retry(
+            client=client,
+            messages=messages,
+            model=model_name,
+            max_tokens=max_tokens,
+            max_retries=max_retries,
+            retry_delay=retry_delay,
+            semaphore=semaphore,
+            **kwargs
+        )
         
         # Update item with response
         result_item = item.copy()
-        result_item['gpt_response'] = response
-        result_item['hash_id'] = hash_id
+        result_item['synthesis_result']['gpt_response'] = response
         return result_item
     
     # Process all items in the batch concurrently
     tasks = [process_single_item(item) for item in batch_items]
-    results = await asyncio.gather(*tasks, return_exceptions=False)
+    results = await tqdm.gather(*tasks, desc="Processing batch items", total=len(tasks))
+    append_jsonl(cache_file, [item['synthesis_result'] for item in results])
     return results
 
-
+FILE_NAME = Path(__file__).stem
+default_output_dir = Path(__file__).parent / "outputs"
 async def main_async(
     dataset_name: str = "ise-uiuc/Magicoder-Evol-Instruct-110K",
     max_samples: Optional[int] = None,
     model_name: str = "o3-mini-2025-01-31",
     max_tokens: int = 8192,
+    top_p: float = 0.95,
+    temperature: float = 0.6,
+    seed: int = 42,
+    n: int = 1,
     num_proc: int = 16,
-    num_test_cases_to_generate: int = 50,
     output_dir: str = default_output_dir,
-    cache_dir: str = default_cache_dir,
     overwrite: bool = False,
-    batch_size: int = 20,
+    save_batch_size: int = 20,
     max_concurrent: int = 10,
     max_retries: int = 3,
     retry_delay: float = 1.0,
@@ -411,7 +265,7 @@ async def main_async(
     print(f"Processing dataset: {dataset_name}")
     print(f"Model: {model_name}")
     print(f"Max samples: {max_samples}")
-    print(f"Batch size: {batch_size}")
+    print(f"Batch size: {save_batch_size}")
     print(f"Max concurrent: {max_concurrent}")
     
     # Preprocess dataset
@@ -419,12 +273,11 @@ async def main_async(
     data = list(dataset)  # Convert to list for easier processing
     
     # Setup paths
-    cache_dir = Path(cache_dir)
-    cache_file = cache_dir / f"{pretty_name(dataset_name)}_{pretty_name(model_name)}.jsonl"
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-
-    output_file = Path(output_dir) / f"{pretty_name(dataset_name)}_{pretty_name(model_name)}.jsonl"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir) if output_dir else default_output_dir
+    output_dir = Path(output_dir) / pretty_name(dataset_name) / pretty_name(model_name)
+    cache_file = Path(output_dir) / f"{FILE_NAME}.cache.jsonl"
+    output_file = output_dir / f"{FILE_NAME}_results.jsonl"
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     if output_file.exists() and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
@@ -440,9 +293,10 @@ async def main_async(
     
     # Identify items that need processing
     items_to_process = []
+    items_to_process_map = {}
     final_results = []
     
-    for item in data:
+    for i, item in enumerate(data):
         # Prepare messages to get hash_id
         if item['problem'] is not None:
             prompt = PROMPT_TEMPLATE_RAW.format(
@@ -456,17 +310,15 @@ async def main_async(
         
         messages = [{"role": "user", "content": prompt}]
         hash_id = hash_messages(messages)
-        
+        item['synthesis_result'] = {
+            "hash_id": hash_id,
+        }
         if hash_id in cached_data:
-            # Use cached result
-            result_item = item.copy()
-            result_item['gpt_response'] = cached_data[hash_id]['response']
-            result_item['hash_id'] = hash_id
-            final_results.append(result_item)
+            item['synthesis_result']['gpt_response'] = cached_data[hash_id]['gpt_response']
         else:
-            # Needs processing
+            items_to_process_map[hash_id] = i
             items_to_process.append(item)
-            final_results.append(item)  # Will be updated later
+        final_results.append(item)  # Initialize with current item
     
     print(f"Found {len(cached_data)} cached items, {len(items_to_process)} items need processing")
     
@@ -479,37 +331,13 @@ async def main_async(
         print(f"Results saved to {output_file}")
         return
     
-    # Create mapping for updating final results
-    items_to_process_map = {}
-    final_results_indices = {}
-    process_idx = 0
-    
-    for i, item in enumerate(data):
-        if item['problem'] is not None:
-            prompt = PROMPT_TEMPLATE_RAW.format(
-                program=item['program'],
-                instruction=item['problem']
-            )
-        else:
-            prompt = PROMPT_TEMPLATE_NO_INSTRUCTION.format(
-                program=item['program']
-            )
-        
-        messages = [{"role": "user", "content": prompt}]
-        hash_id = hash_messages(messages)
-        
-        if hash_id not in cached_data:
-            items_to_process_map[process_idx] = i
-            final_results_indices[process_idx] = i
-            process_idx += 1
-    
     # Process items in batches using async client
     async with OpenAIAsyncClient(api_key=api_key, base_url=base_url) as client:
-        num_batches = (len(items_to_process) + batch_size - 1) // batch_size
+        num_batches = (len(items_to_process) + save_batch_size - 1) // save_batch_size
         processed_count = 0
         
-        for i in tqdm(range(0, len(items_to_process), batch_size), desc="Processing batches"):
-            batch_items = items_to_process[i:i + batch_size]
+        for i in tqdm(range(0, len(items_to_process), save_batch_size), desc="Processing batches"):
+            batch_items = items_to_process[i:i + save_batch_size]
             
             # Process batch
             batch_results = await process_batch_async(
@@ -517,24 +345,27 @@ async def main_async(
                 batch_items=batch_items,
                 model_name=model_name,
                 max_tokens=max_tokens,
-                cached_data=cached_data,
                 cache_file=cache_file,
                 max_concurrent=max_concurrent,
                 max_retries=max_retries,
                 retry_delay=retry_delay,
+                temperature=temperature,
+                top_p=top_p,
+                n=n,
+                seed=seed,
             )
             
             # Update final results
             for j, result_item in enumerate(batch_results):
-                process_result_idx = i + j
-                final_result_idx = final_results_indices[process_result_idx]
-                final_results[final_result_idx] = result_item
+                hash_id = result_item['synthesis_result']['hash_id']
+                idx = items_to_process_map[hash_id]
+                final_results[idx] = result_item
             
             processed_count += len(batch_results)
-            print(f"Processed batch {i//batch_size + 1}/{num_batches} ({processed_count}/{len(items_to_process)} items)")
+            print(f"Processed batch {i//save_batch_size + 1}/{num_batches} ({processed_count}/{len(items_to_process)} items)")
             
             # Add delay between batches
-            if batch_delay > 0 and i + batch_size < len(items_to_process):
+            if batch_delay > 0 and i + save_batch_size < len(items_to_process):
                 await asyncio.sleep(batch_delay)
     
     # Save final results
@@ -555,12 +386,14 @@ def main(
     max_samples: Optional[int] = None,
     model_name: str = "o3-mini-2025-01-31",
     max_tokens: int = 8192,
+    top_p: float = 0.95,
+    temperature: float = 0.6,
+    seed: int = 42,
+    n: int = 1,
     num_proc: int = 16,
-    num_test_cases_to_generate: int = 50,
     output_dir: str = default_output_dir,
-    cache_dir: str = default_cache_dir,
     overwrite: bool = False,
-    batch_size: int = 20,
+    save_batch_size: int = 20,
     max_concurrent: int = 10,
     max_retries: int = 3,
     retry_delay: float = 1.0,
@@ -577,12 +410,14 @@ def main(
             max_samples=max_samples,
             model_name=model_name,
             max_tokens=max_tokens,
+            top_p=top_p,
+            temperature=temperature,
+            seed=seed,
+            n=n,
             num_proc=num_proc,
-            num_test_cases_to_generate=num_test_cases_to_generate,
             output_dir=output_dir,
-            cache_dir=cache_dir,
             overwrite=overwrite,
-            batch_size=batch_size,
+            save_batch_size=save_batch_size,
             max_concurrent=max_concurrent,
             max_retries=max_retries,
             retry_delay=retry_delay,
@@ -606,14 +441,14 @@ This code is part of the AceCoderV2 project, which is designed to generate chall
 Usage examples:
 
 # Basic usage with async processing
-python step1_prompting.py --dataset_name ise-uiuc/Magicoder-Evol-Instruct-110K --max_samples 50 --model_name gpt-4o-mini --batch_size 10 --max_concurrent 5
+python step1_prompting.py --dataset_name ise-uiuc/Magicoder-Evol-Instruct-110K --max_samples 50 --model_name gpt-4o-mini --save_batch_size 25 --max_concurrent 25
 
 # High throughput processing
-python step1_prompting.py --dataset_name ise-uiuc/Magicoder-Evol-Instruct-110K --max_samples 500 --model_name o3-mini-2025-01-31 --batch_size 25 --max_concurrent 15 --batch_delay 0.1
+python step1_prompting.py --dataset_name ise-uiuc/Magicoder-Evol-Instruct-110K --max_samples 500 --model_name o3-mini-2025-01-31 --save_batch_size 25 --max_concurrent 15 --batch_delay 0.1
 
 # Conservative settings for rate-limited scenarios
-python step1_prompting.py --dataset_name bigcode/stack-dedup-python-fns --max_samples 100 --model_name gpt-4 --batch_size 5 --max_concurrent 3 --batch_delay 2.0
+python step1_prompting.py --dataset_name bigcode/stack-dedup-python-fns --max_samples 100 --model_name gpt-4 --save_batch_size 5 --max_concurrent 3 --batch_delay 2.0
 
 # Resume interrupted processing (cached items will be skipped)
-python step1_prompting.py --dataset_name ise-uiuc/Magicoder-OSS-Instruct-75K --max_samples 1000 --model_name gpt-4o-mini --batch_size 20 --max_concurrent 10
+python step1_prompting.py --dataset_name ise-uiuc/Magicoder-OSS-Instruct-75K --max_samples 1000 --model_name gpt-4o-mini --save_batch_size 20 --max_concurrent 10
 """

@@ -7,71 +7,8 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from tqdm.asyncio import tqdm
 import time
-from acecoderv2.synthesizer.utils import pretty_name, append_jsonl
-
-
-class OpenAIAsyncClient:
-    """
-    Async OpenAI client using aiohttp for better control and performance.
-    """
-    
-    def __init__(self, api_key: str, base_url: str = "https://api.openai.com/v1"):
-        self.api_key = api_key
-        self.base_url = base_url.rstrip('/')
-        self.session = None
-        
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=300),  # 5 minute timeout
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        )
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    async def chat_completion(
-        self,
-        messages: List[Dict[str, str]],
-        model: str,
-        temperature: float = 0.7,
-        top_p: float = 1.0,
-        max_tokens: int = 4000,
-        seed: Optional[int] = None,
-    ) -> str:
-        """
-        Send a chat completion request to OpenAI API.
-        """
-        url = f"{self.base_url}/chat/completions"
-        
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": max_tokens,
-        }
-        
-        if seed is not None:
-            payload["seed"] = seed
-        
-        async with self.session.post(url, json=payload) as response:
-            if response.status == 200:
-                data = await response.json()
-                return data["choices"][0]["message"]["content"]
-            else:
-                error_text = await response.text()
-                raise aiohttp.ClientResponseError(
-                    request_info=response.request_info,
-                    history=response.history,
-                    status=response.status,
-                    message=f"OpenAI API error: {error_text}"
-                )
-
+from acecoderv2.synthesizer.utils import pretty_name, append_jsonl, hash_messages
+from acecoderv2.synthesizer.openai_utils import OpenAIAsyncClient, generate_with_retry
 
 def preprocess_prompts_auto(data: List[dict]) -> tuple[List[List[dict]], List[str]]:
     """
@@ -81,7 +18,7 @@ def preprocess_prompts_auto(data: List[dict]) -> tuple[List[List[dict]], List[st
     for item in data:
         messages = [{"role": "user", "content": item["problem"]}]
         messages_list.append(messages)
-    return messages_list, [item["id"] for item in data]
+    return messages_list
 
 
 def preprocess_prompts(data: List[dict], mode: str = "auto") -> tuple[List[List[dict]], List[str]]:
@@ -90,80 +27,6 @@ def preprocess_prompts(data: List[dict], mode: str = "auto") -> tuple[List[List[
     else:
         raise ValueError(f"Unsupported mode: {mode}. Supported modes: 'auto'.")
 
-
-async def generate_with_retry(
-    client: OpenAIAsyncClient,
-    messages: List[dict],
-    model: str,
-    temperature: float,
-    top_p: float,
-    max_tokens: int,
-    seed: int,
-    max_retries: int = 3,
-    retry_delay: float = 1.0,
-    semaphore: asyncio.Semaphore = None,
-) -> str:
-    """
-    Generate response with retry logic for handling rate limits and errors.
-    Uses semaphore to limit concurrent requests.
-    """
-    async def _make_request():
-        for attempt in range(max_retries):
-            try:
-                response = await client.chat_completion(
-                    messages=messages,
-                    model=model,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
-                    seed=seed
-                )
-                return response
-            except aiohttp.ClientResponseError as e:
-                if e.status == 429:  # Rate limit
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
-                        print(f"Rate limit hit, waiting {wait_time:.1f}s before retry {attempt + 2}/{max_retries}")
-                        await asyncio.sleep(wait_time)
-                        continue
-                    else:
-                        return f"ERROR: Rate limit exceeded after {max_retries} attempts"
-                elif e.status >= 500:  # Server error
-                    if attempt < max_retries - 1:
-                        wait_time = retry_delay * (2 ** attempt)
-                        print(f"Server error {e.status}, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                        await asyncio.sleep(wait_time)
-                        continue
-                    else:
-                        return f"ERROR: Server error {e.status} after {max_retries} attempts"
-                else:
-                    return f"ERROR: HTTP {e.status} - {str(e)}"
-            except asyncio.TimeoutError:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)
-                    print(f"Request timeout, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                    await asyncio.sleep(wait_time)
-                    continue
-                else:
-                    return f"ERROR: Timeout after {max_retries} attempts"
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    wait_time = retry_delay * (2 ** attempt)
-                    print(f"Unexpected error: {e}, retrying in {wait_time:.1f}s (attempt {attempt + 2}/{max_retries})")
-                    await asyncio.sleep(wait_time)
-                    continue
-                else:
-                    return f"ERROR: {str(e)}"
-        
-        return "ERROR: All retry attempts failed"
-    
-    if semaphore:
-        async with semaphore:
-            return await _make_request()
-    else:
-        return await _make_request()
-
-
 async def process_batch(
     client: OpenAIAsyncClient,
     messages_batch: List[List[dict]],
@@ -171,6 +34,7 @@ async def process_batch(
     model: str,
     temperature: float,
     top_p: float,
+    n: int,
     max_tokens: int,
     seed: int,
     max_retries: int,
@@ -190,6 +54,7 @@ async def process_batch(
             model=model,
             temperature=temperature,
             top_p=top_p,
+            n=n,
             max_tokens=max_tokens,
             seed=seed,
             max_retries=max_retries,
@@ -222,6 +87,7 @@ async def main_async(
     base_url: str = "https://api.openai.com/v1",
     seed: int = 42,
     top_p: float = 0.95,
+    n: int = 1,
     temperature: float = 0.6,
     max_tokens: int = 4000,
     overwrite: bool = False,
@@ -235,12 +101,21 @@ async def main_async(
         if api_key is None:
             raise ValueError("OpenAI API key not found. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
     
-    output_dir = Path(output_dir) if output_dir else default_output_dir
+    output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    cache_dir = Path(cache_dir) if cache_dir else default_cache_dir
-    cache_file = cache_dir / Path(file_path).stem / f"{pretty_name(model)}_openai_seed{seed}_{start_idx}_{end_idx}.jsonl"
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if start_idx is None and end_idx is None:
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}.jsonl"
+    else:
+        if end_idx is None:
+            end_idx = len(data)
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}_{start_idx}_{end_idx}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model)}_seed{seed}_{start_idx}_{end_idx}.jsonl"
+
+    if output_file.exists() and not overwrite:
+        print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
+        return
     
     # Load cached data if exists
     cached_data = {}
@@ -249,7 +124,7 @@ async def main_async(
             for line in f.readlines():
                 if line.strip():
                     item = json.loads(line)
-                    cached_data[item['id']] = item
+                    cached_data[item['qid']] = item
         print(f"Loaded {len(cached_data)} cached items from {cache_file}")
     
     # Load data
@@ -262,30 +137,37 @@ async def main_async(
     else:
         raise ValueError("Unsupported file format. Please provide a .jsonl or .json file.")
 
-    if end_idx is None:
-        end_idx = len(data)
-    data = data[start_idx:end_idx]
-    
-    output_file = output_dir / Path(file_path).stem / f"{pretty_name(model)}_openai_seed{seed}_{start_idx}_{end_idx}.jsonl"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    if output_file.exists() and not overwrite:
-        print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
-        return
+    if start_idx is not None and end_idx is not None:
+        data = data[start_idx:end_idx]
     
     # Identify items that need processing (not in cache)
     items_to_process = []
     final_results = []
     
     for item in data:
-        item_id = item["id"]
-        if item_id in cached_data:
+        qid = hash_messages(item['synthesis_result']['problem'])
+        if qid in cached_data:
             # Use cached result
-            final_results.append(cached_data[item_id])
+            new_item = item.copy()
+            new_item['gen_result'] = cached_data[qid]
         else:
+            new_item = item.copy()
+            new_item['gen_result'] = {
+                'outputs': [],
+                'qid': qid,
+                'prompt': None,
+                'sampling_params': {
+                    "model_name_or_path": model,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "n": n,
+                    "max_tokens": max_tokens,
+                    "seed": seed,
+                }
+            }
             # Needs processing
-            items_to_process.append(item)
-            final_results.append(item)  # Will be updated with results later
+            items_to_process.append(new_item)
+        final_results.append(new_item)  # Will be updated with results later
     
     print(f"Processing {len(data)} items from {start_idx} to {end_idx}...")
     print(f"Found {len(cached_data)} cached items, {len(items_to_process)} items need processing")
@@ -309,10 +191,11 @@ async def main_async(
     print(f"Max concurrent requests per batch: {max_concurrent}")
 
     # Preprocess prompts for items that need processing
-    messages_list, qids = preprocess_prompts(items_to_process)
+    messages_list = preprocess_prompts(items_to_process)
+    qids = [item['gen_result']['qid'] for item in items_to_process]
     
     # Create mapping for updating final results
-    id_to_result_idx = {item["id"]: idx for idx, item in enumerate(final_results)}
+    qid_to_result_idx = {item['gen_result']['qid']: idx for idx, item in enumerate(final_results)}
 
     # Create async client context
     start_time = time.time()
@@ -335,13 +218,14 @@ async def main_async(
             
             # Generate responses for this batch
             batch_start_time = time.time()
-            responses = await process_batch(
+            batch_responses = await process_batch(
                 client=client,
                 messages_batch=batch_messages,
                 qids_batch=batch_qids,
                 model=model,
                 temperature=temperature,
                 top_p=top_p,
+                n=n,
                 max_tokens=max_tokens,
                 seed=seed,
                 max_retries=max_retries,
@@ -352,39 +236,19 @@ async def main_async(
             
             # Process responses and update data
             batch_results = []
-            for j, response in enumerate(responses):
-                # Clean up response
-                if response and not response.startswith("ERROR:"):
-                    response = response.strip()
-                    # Remove common end tokens
-                    for end_token in ["<|im_end|>", "<|end_of_text|>", "<|eot_id|>"]:
-                        if end_token in response:
-                            idx = response.index(end_token)
-                            response = response[:idx]
-                            break
-                
-                # Create result item
-                result_item = batch_data[j].copy()
-                result_item['llm_response'] = response
-                result_item['qid'] = batch_qids[j]
-                result_item['messages'] = batch_messages[j]
-                result_item['generation_params'] = {
-                    'model': model,
-                    'temperature': temperature,
-                    'top_p': top_p,
-                    'max_tokens': max_tokens,
-                    'seed': seed
-                }
-                
-                batch_results.append(result_item)
-                
+            for j, responses in enumerate(batch_responses):
+                # Update the item with results
+                batch_data[j]['gen_result']['outputs'].extend(responses)
+                batch_data[j]['gen_result']['prompt'] = batch_messages[j]
+
                 # Update final results
-                result_idx = id_to_result_idx[batch_qids[j]]
-                final_results[result_idx] = result_item
-            
+                result_idx = qid_to_result_idx[batch_qids[j]]
+                final_results[result_idx] = batch_data[j]
+
+                batch_results.append(batch_data[j]['gen_result'])
+
             # Save batch to cache
-            for result_item in batch_results:
-                append_jsonl(cache_file, result_item)
+            append_jsonl(cache_file, batch_results)
             
             total_processed += len(batch_messages)
             if not progress_bar:
@@ -417,7 +281,7 @@ def main(
     file_path: str,
     output_dir: str = None,
     cache_dir: str = None,
-    start_idx: int = 0,
+    start_idx: int = None,
     end_idx: Optional[int] = None,
     batch_size: int = 20,
     max_concurrent: int = 10,
@@ -426,6 +290,7 @@ def main(
     base_url: str = "https://api.openai.com/v1",
     seed: int = 42,
     top_p: float = 0.95,
+    n: int = 1,
     temperature: float = 0.6,
     max_tokens: int = 4000,
     overwrite: bool = False,
@@ -453,6 +318,7 @@ def main(
             base_url=base_url,
             seed=seed,
             top_p=top_p,
+            n=n,
             temperature=temperature,
             max_tokens=max_tokens,
             overwrite=overwrite,
@@ -475,18 +341,19 @@ if __name__ == "__main__":
 Usage examples:
 
 # High performance settings with aiohttp
-python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_openai_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=50 \
-    --batch_size=25 \
+    --batch_size=10 \
     --max_concurrent=25 \
     --model='gpt-4.1-mini' \
     --top_p=0.95 \
     --temperature=0.6 \
-    --max_tokens=4000
+    --max_tokens=4000 \
+    --n=4
 
 # Conservative settings for rate limit sensitive scenarios
-python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_openai_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=100 \
     --batch_size=10 \
@@ -495,7 +362,7 @@ python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110
     --batch_delay=2.0
 
 # Using custom OpenAI-compatible API
-python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_openai_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=500 \
     --batch_size=30 \
@@ -505,7 +372,7 @@ python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110
     --api_key='your-api-key'
 
 # Maximum throughput (be careful with rate limits!)
-python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_openai_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=2000 \
     --batch_size=100 \
@@ -514,7 +381,7 @@ python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110
     --retry_delay=0.5
 
 # Resume interrupted job (cached items will be skipped)
-python step2.1_openai_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_openai_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=1000 \
     --batch_size=25 \

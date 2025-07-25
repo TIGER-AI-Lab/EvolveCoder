@@ -8,7 +8,7 @@ from vllm import LLM, SamplingParams
 from tqdm import tqdm
 from typing import List
 from transformers import AutoTokenizer
-from acecoderv2.synthesizer.utils import pretty_name, append_jsonl
+from acecoderv2.synthesizer.utils import pretty_name, append_jsonl, hash_messages
 
 def load_vllm_model(
     model_name_or_path: str,
@@ -32,14 +32,14 @@ def preprocess_prompts_auto(
     """
     prompts = []
     for item in data:
-        messages = [{"role": "user", "content": item["problem"]}]
+        messages = [{"role": "user", "content": item['synthesis_result']["problem"]}]
         prompt = tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True,
         )
         prompts.append(prompt)
-    return prompts, [item["hash_id"] for item in data]
+    return prompts
 
 def preprocess_prompts(data: List[dict], tokenizer: AutoTokenizer, mode:str="auto") -> List[str]:
     if mode == "auto":
@@ -50,14 +50,12 @@ def preprocess_prompts(data: List[dict], tokenizer: AutoTokenizer, mode:str="aut
 
 # FILE_NAME = Path(__file__).stem
 FILE_NAME = "step2.1_gen"
-default_output_dir = Path(__file__).parent / "outputs" / FILE_NAME
-default_cache_dir = Path(__file__).parent / "outputs" / FILE_NAME / "cache"
 
 def main(
     file_path: str,
     output_dir: str = None,
     cache_dir: str = None,
-    start_idx = 0,
+    start_idx = None,
     end_idx: Optional[int] = None,
     save_batch_size: int = 16,
     model_name_or_path: str = "meta-llama/Llama-2-7b-chat-hf",
@@ -66,6 +64,7 @@ def main(
     seed: int = 42,
     top_p: float = 0.95,
     top_k: int = 1,
+    n=1,
     temperature: float = 0.6,
     max_tokens: int = 32768,
     overwrite: bool = False,
@@ -76,12 +75,21 @@ def main(
         os.environ["CUDA_VISIBLE_DEVICES"] = device_id
         print(f"Using CUDA_VISIBLE_DEVICES={device_id}")
     
-    output_dir = Path(output_dir) if output_dir else default_output_dir
+    output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    cache_dir = Path(cache_dir) if cache_dir else default_cache_dir
-    cache_file = cache_dir / Path(file_path).stem / f"{pretty_name(model_name_or_path)}_vllm_seed{seed}_{start_idx}_{end_idx}.jsonl"
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    if start_idx is None and end_idx is None:
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}.jsonl"
+    else:
+        if end_idx is None:
+            end_idx = len(data)
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.jsonl"
+
+    if output_file.exists() and not overwrite:
+        print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
+        return
     
     # Load cached data if exists
     cached_data = {}
@@ -90,7 +98,7 @@ def main(
             for line in f.readlines():
                 if line.strip():
                     item = json.loads(line)
-                    cached_data[item['hash_id']] = item
+                    cached_data[item['qid']] = item
         print(f"Loaded {len(cached_data)} cached items from {cache_file}")
     
     # Load input data
@@ -103,16 +111,8 @@ def main(
     else:
         raise ValueError("Unsupported file format. Please provide a .jsonl or .json file.")
 
-    if end_idx is None:
-        end_idx = len(data)
-    data = data[start_idx:end_idx]
-    
-    output_file = output_dir / Path(file_path).stem / f"{pretty_name(model_name_or_path)}_vllm_seed{seed}_{start_idx}_{end_idx}.jsonl"
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    
-    if output_file.exists() and not overwrite:
-        print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
-        return
+    if start_idx is not None and end_idx is not None:
+        data = data[start_idx:end_idx]
     
     print(f"Processing {len(data)} items from {start_idx} to {end_idx}...")
 
@@ -121,15 +121,31 @@ def main(
     final_results = []
     
     for item in data:
-        hash_id = item["hash_id"]
-        if hash_id in cached_data:
+        qid = hash_messages(item['synthesis_result']['problem'])
+        if qid in cached_data:
             # Use cached result
-            final_results.append(cached_data[hash_id])
+            new_item = item.copy()
+            new_item['gen_result'] = cached_data[qid]
         else:
+            new_item = item.copy()
+            new_item['gen_result'] = {
+                'outputs': [],
+                'qid': qid,
+                'prompt': None,
+                'sampling_params': {
+                    "model_name_or_path": model_name_or_path,
+                    "temperature": temperature,
+                    "top_p": top_p,
+                    "top_k": top_k,
+                    "n": n,
+                    "max_tokens": max_tokens,
+                    "seed": seed,
+                }
+            }
             # Needs processing
-            items_to_process.append(item)
-            final_results.append(item)  # Will be updated with results later
-    
+            items_to_process.append(new_item)
+        final_results.append(new_item)  # Will be updated with results later
+
     print(f"Found {len(cached_data)} cached items, {len(items_to_process)} items need processing")
     
     if len(items_to_process) == 0:
@@ -152,7 +168,8 @@ def main(
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
 
     # Preprocess prompts for items that need processing
-    prompts, qids = preprocess_prompts(items_to_process, tokenizer)
+    prompts = preprocess_prompts(items_to_process, tokenizer)
+    qids = [item['gen_result']['qid'] for item in items_to_process]
 
     # Set up sampling parameters
     if top_p < 1:
@@ -160,19 +177,21 @@ def main(
             temperature=temperature,
             top_p=top_p,
             max_tokens=max_tokens,
-            seed=seed
+            seed=seed,
+            n=n
         )
     else:
         sampling_params = SamplingParams(
             temperature=temperature,
             top_k=top_k,
             max_tokens=max_tokens,
-            seed=seed
+            seed=seed,
+            n=n
         )
     
     # Generate responses in batches
     processed_items = []
-    hash_id_to_result_idx = {item["hash_id"]: idx for idx, item in enumerate(final_results)}
+    qid_to_result_idx = {item['gen_result']['qid']: idx for idx, item in enumerate(final_results)}
     
     for i in tqdm(range(0, len(prompts), save_batch_size), desc="Generating responses"):
         batch_prompts = prompts[i:i + save_batch_size]
@@ -183,39 +202,21 @@ def main(
         
         batch_results = []
         for j, output in enumerate(outputs):
-            response = output.outputs[0].text.strip()
-            
-            # Clean up response
-            for end_token in ["<|im_end|>", "<|end_of_text|>", "<|eot_id|>"]:
-                if end_token in response:
-                    idx = response.index(end_token)
-                    response = response[:idx]
-                    break
+            generated_texts = [output.outputs[k].text.strip() for k in range(len(output.outputs))]
 
             # Update the item with results
-            result_item = batch_items[j].copy()
-            result_item['llm_response'] = response
-            result_item['qid'] = batch_qids[j]
-            result_item['prompt'] = batch_prompts[j]
-            result_item['sampling_params'] = {
-                "model_name_or_path": model_name_or_path,
-                "temperature": sampling_params.temperature,
-                "top_p": sampling_params.top_p,
-                "top_k": sampling_params.top_k,
-                "max_tokens": sampling_params.max_tokens,
-                "seed": sampling_params.seed,
-            }
+            batch_items[j]['gen_result']['outputs'].extend(generated_texts)
+            batch_items[j]['gen_result']['prompt'] = batch_prompts[j]
             
-            batch_results.append(result_item)
-            processed_items.append(result_item)
+            batch_results.append(batch_items[j]['gen_result'])
+            processed_items.append(batch_items[j])
             
             # Update final results
-            result_idx = hash_id_to_result_idx[batch_qids[j]]
-            final_results[result_idx] = result_item
+            result_idx = qid_to_result_idx[batch_qids[j]]
+            final_results[result_idx] = batch_items[j]
         
         # Save batch to cache
-        for result_item in batch_results:
-            append_jsonl(cache_file, result_item)
+        append_jsonl(cache_file, batch_results)
         
         print(f"Saved batch {i//save_batch_size + 1} to cache ({len(batch_results)} items)")
 
@@ -236,11 +237,11 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python step2.1_vllm_gen.py outputs/step1.1_parsing/Magicoder_Evol_Instruct_110K_gpt_4o_mini.jsonl \
+python step2.1_vllm_gen.py outputs/Magicoder_Evol_Instruct_110K/gpt_4o_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=50 \
     --save_batch_size=16 \
     --model_name_or_path='Qwen/Qwen2.5-Coder-7B-Instruct' \
-    --tensor_parallel_size=2 \
-    --top_p=0.95 --top_k=1 --temperature=0.6 --max_tokens=2048
+    --tensor_parallel_size=1 \
+    --top_p=0.95 --top_k=1 --temperature=0.6 --max_tokens=2048 --n 8
 """
