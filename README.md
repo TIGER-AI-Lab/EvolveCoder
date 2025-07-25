@@ -1,6 +1,12 @@
 # AceCoderV2
 
 
+## Installation
+```bash
+uv sync
+uv pip install -e .
+```
+
 ## Evaluation
 `
 ```bash

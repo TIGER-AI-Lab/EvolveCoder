@@ -2,16 +2,16 @@
 set -e
 # Parameters
 DATASET_NAME="ise-uiuc/Magicoder-Evol-Instruct-110K"
-MAX_SAMPLES=50 # set to 0 for all samples
-MODEL_NAME="gpt-4o-mini"
-SAVE_BATCH_SIZE=25
+MAX_SAMPLES=20 # set to 0 for all samples
+MODEL_NAME="o4-mini"
+SAVE_BATCH_SIZE=5
 MAX_CONCURRENT=25
 GEN_MODEL="Qwen/Qwen2.5-Coder-7B-Instruct"
-TENSOR_PARALLEL_SIZE=1
+TENSOR_PARALLEL_SIZE=2
 TOP_P=0.95
 TOP_K=1
 TEMPERATURE=0.6
-MAX_TOKENS=2048
+MAX_TOKENS=32768
 N=8
 SEED=42
 OVERWRITE=False

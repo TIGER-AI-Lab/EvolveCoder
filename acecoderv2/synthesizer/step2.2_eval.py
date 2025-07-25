@@ -226,7 +226,7 @@ def main(
     new_file_name = Path(file_path).stem.replace(LAST_STEP_NAME, FILE_NAME)
     output_file = output_dir / f"{new_file_name}.jsonl"
     
-    if output_file.exists() and not overwrite:
+    if output_file.exists() and not output_file.stat().st_size and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
         return
 

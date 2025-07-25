@@ -33,7 +33,6 @@ class OpenAIAsyncClient:
         model: str,
         temperature: float = 0.7,
         top_p: float = 1.0,
-        n: int = 1,
         max_tokens: int = 4000,
         seed: Optional[int] = None,
     ) -> str:
@@ -47,17 +46,20 @@ class OpenAIAsyncClient:
             "messages": messages,
             "temperature": temperature,
             "top_p": top_p,
-            "n": n,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_tokens,
         }
+        if model.startswith("o"):
+            # o-series do not set temperature and top_p
+            payload.pop("temperature", None)
+            payload.pop("top_p", None)
         
         if seed is not None:
             payload["seed"] = seed
-        
+
         async with self.session.post(url, json=payload) as response:
             if response.status == 200:
                 data = await response.json()
-                return [data["choices"][i]["message"]["content"] for i in range(len(data["choices"]))]
+                return data["choices"][0]["message"]["content"]
             else:
                 error_text = await response.text()
                 raise aiohttp.ClientResponseError(
@@ -79,10 +81,11 @@ async def generate_with_retry(
     max_retries: int = 3,
     retry_delay: float = 1.0,
     semaphore: asyncio.Semaphore = None,
-) -> str:
+) -> List[str]:
     """
-    Generate response with retry logic for handling rate limits and errors.
+    Generate n responses concurrently with retry logic for handling rate limits and errors.
     Uses semaphore to limit concurrent requests.
+    Returns a list of n responses.
     """
     async def _make_request():
         for attempt in range(max_retries):
@@ -92,7 +95,6 @@ async def generate_with_retry(
                     model=model,
                     temperature=temperature,
                     top_p=top_p,
-                    n=n,
                     max_tokens=max_tokens,
                     seed=seed
                 )
@@ -135,8 +137,25 @@ async def generate_with_retry(
         
         return "ERROR: All retry attempts failed"
     
-    if semaphore:
-        async with semaphore:
+    async def _make_request_with_semaphore():
+        if semaphore:
+            async with semaphore:
+                return await _make_request()
+        else:
             return await _make_request()
-    else:
-        return await _make_request()
+    
+    # Create n concurrent tasks
+    tasks = [_make_request_with_semaphore() for _ in range(n)]
+    
+    # Wait for all tasks to complete
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Convert exceptions to error strings
+    final_results = []
+    for result in results:
+        if isinstance(result, Exception):
+            final_results.append(f"ERROR: {str(result)}")
+        else:
+            final_results.append(result)
+    
+    return final_results

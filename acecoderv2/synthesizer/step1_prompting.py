@@ -223,7 +223,7 @@ async def process_batch_async(
         
         # Update item with response
         result_item = item.copy()
-        result_item['synthesis_result']['gpt_response'] = response
+        result_item['synthesis_result']['gpt_response'] = response[0]
         return result_item
     
     # Process all items in the batch concurrently
