@@ -268,10 +268,6 @@ async def main_async(
     print(f"Batch size: {save_batch_size}")
     print(f"Max concurrent: {max_concurrent}")
     
-    # Preprocess dataset
-    dataset = preprocess_dataset(dataset_name, max_sample=max_samples, num_proc=num_proc)
-    data = list(dataset)  # Convert to list for easier processing
-    
     # Setup paths
     output_dir = Path(output_dir) if output_dir else default_output_dir
     output_dir = Path(output_dir) / pretty_name(dataset_name) / pretty_name(model_name)
@@ -282,6 +278,10 @@ async def main_async(
     if output_file.exists() and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
         return
+
+    # Preprocess dataset
+    dataset = preprocess_dataset(dataset_name, max_sample=max_samples, num_proc=num_proc)
+    data = list(dataset)  # Convert to list for easier processing
 
     # Load existing cache
     cached_data = {}

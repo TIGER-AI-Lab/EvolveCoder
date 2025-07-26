@@ -35,6 +35,7 @@ def main(
     num_proc: int = 1,
     output_dir: str = None,
     do_filter: bool = True,
+    overwrite: bool = False
 ):
     """
     Main function to generate test cases for a given dataset.
@@ -44,6 +45,9 @@ def main(
     assert os.path.exists(file_path), f"File {file_path} does not exist."
     output_dir = output_dir or Path(file_path).parent
     output_file = output_dir / f"{FILE_NAME}.jsonl"
+    if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
+        print(f"Output file {output_file} already exists and is not empty. Use --overwrite to overwrite.")
+        return
 
     dataset = datasets.Dataset.from_json(file_path)
 

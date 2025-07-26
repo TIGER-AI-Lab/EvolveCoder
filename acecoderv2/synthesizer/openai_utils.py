@@ -81,6 +81,7 @@ async def generate_with_retry(
     max_retries: int = 3,
     retry_delay: float = 1.0,
     semaphore: asyncio.Semaphore = None,
+    timeout: int = 120,
 ) -> List[str]:
     """
     Generate n responses concurrently with retry logic for handling rate limits and errors.
@@ -90,13 +91,17 @@ async def generate_with_retry(
     async def _make_request():
         for attempt in range(max_retries):
             try:
-                response = await client.chat_completion(
-                    messages=messages,
-                    model=model,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
-                    seed=seed
+                # add timeout
+                response = await asyncio.wait_for(
+                    client.chat_completion(
+                        messages=messages,
+                        model=model,
+                        temperature=temperature,
+                        top_p=top_p,
+                        max_tokens=max_tokens,
+                        seed=seed
+                    ),
+                    timeout=timeout  # 1 minute timeout for each request
                 )
                 return response
             except aiohttp.ClientResponseError as e:
