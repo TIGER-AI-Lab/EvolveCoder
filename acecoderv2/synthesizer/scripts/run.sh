@@ -2,7 +2,7 @@
 set -e
 # Parameters
 DATASET_NAME="ise-uiuc/Magicoder-Evol-Instruct-110K"
-MAX_SAMPLES=100 # set to 0 for all samples
+MAX_SAMPLES=25 # set to 0 for all samples
 MODEL_NAME="o4-mini"
 SAVE_BATCH_SIZE=25
 MAX_CONCURRENT=25

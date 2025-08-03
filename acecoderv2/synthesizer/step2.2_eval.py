@@ -17,7 +17,7 @@ def main(
     output_dir: str = None,
     overwrite: bool = False,
     num_proc: int = 64,
-    max_samples: Optional[int] = None
+    max_samples: Optional[int] = 0
 ):
     output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
