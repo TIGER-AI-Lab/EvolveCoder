@@ -1,0 +1,94 @@
+
+================================================================================
+EVALUATION STATISTICS
+================================================================================
+📊 Basic Info:
+   Total problems: 4
+   Total solutions: 85
+   Solutions per problem: 21
+
+🎯 Pass Rate Statistics:
+   Mean pass rate: 0.6327 (63.27%)
+   Median pass rate: 1.0000 (100.00%)
+   Std deviation: 0.4797
+   Solutions per problem (variable): 85/4 = 21.0 avg
+   Pass@k statistics skipped (non-uniform solution distribution)
+   Min pass rate: 0.0000 (0.00%)
+   Max pass rate: 1.0000 (100.00%)
+   Total solutions with pass rate 1.0: 52
+   Percentiles:
+     25th: 0.0000 (0.00%)
+     50th: 1.0000 (100.00%)
+     75th: 1.0000 (100.00%)
+     90th: 1.0000 (100.00%)
+     95th: 1.0000 (100.00%)
+     99th: 1.0000 (100.00%)
+
+✅ Solution Quality Distribution:
+   Perfect solutions (100% pass): 52 (61.18%)
+   Partial solutions (0% < pass < 100%): 2 (2.35%)
+   Failed solutions (0% pass): 31 (36.47%)
+
+📈 Pass Rate Distribution (bins):
+   [0.0, 0.1): 31 solutions (36.47%)
+   [0.1, 0.2): 0 solutions (0.00%)
+   [0.2, 0.3): 0 solutions (0.00%)
+   [0.3, 0.4): 0 solutions (0.00%)
+   [0.4, 0.5): 0 solutions (0.00%)
+   [0.5, 0.6): 0 solutions (0.00%)
+   [0.6, 0.7): 0 solutions (0.00%)
+   [0.7, 0.8): 0 solutions (0.00%)
+   [0.8, 0.9): 1 solutions (1.18%)
+   [0.9, 1.0): 53 solutions (62.35%)
+
+🧩 Problem-level Analysis:
+   Average pass rate per problem: 0.5961 ± 0.2117
+   Best solution per problem: 1.0000 ± 0.0000
+   Worst solution per problem: 0.0000 ± 0.0000
+
+🎚️  Problem Difficulty (based on best solution):
+   Easy (≥80% pass): 4 (100.00%)
+   Medium (40-80% pass): 0 (0.00%)
+   Hard (<40% pass): 0 (0.00%)
+
+🧪 Test Case Analysis:
+   Total test cases: 915
+   Passed test cases: 644 (70.38%)
+   Failed test cases: 271 (29.62%)
+   Overall test pass rate: 0.7038 (70.38%)
+   Avg test cases per solution: 10.76 ± 4.17
+   Min/Max test cases: 5/16
+
+   📋 Failure Reasons:
+     pass: 644 (70.38%)
+     unexecuted: 174 (19.02%)
+     fail: 96 (10.49%)
+     timeout: 1 (0.11%)
+
+   ❌ Error Analysis:
+     Test cases with errors: 27 (2.95%)
+     Top error messages:
+       26x (96.3%): name 'max_weighted_path' is not defined
+       1x (3.7%): Timed out!
+
+   ⏱️  Timeout Analysis:
+     Timeout test cases: 1 (0.11%)
+
+   ⏰ Time Limit Analysis:
+     Average time limit: 1.00s ± 0.00s
+     Min/Max time limit: 1.00s / 1.00s
+     Time limit distribution:
+       1s: 915 tests (100.00%)
+
+🏆 Top 5 Easiest Problems (by best solution pass rate):
+   1. Problem 3: 1.0000 (avg: 0.5155)
+   2. Problem 2: 1.0000 (avg: 0.2857)
+   3. Problem 1: 1.0000 (avg: 0.8000)
+   4. Problem 0: 1.0000 (avg: 0.7830)
+
+💀 Top 5 Hardest Problems (by best solution pass rate):
+   1. Problem 0: 1.0000 (avg: 0.7830)
+   2. Problem 1: 1.0000 (avg: 0.8000)
+   3. Problem 2: 1.0000 (avg: 0.2857)
+   4. Problem 3: 1.0000 (avg: 0.5155)
+================================================================================

@@ -1,0 +1,95 @@
+
+================================================================================
+EVALUATION STATISTICS
+================================================================================
+📊 Basic Info:
+   Total problems: 4
+   Total solutions: 93
+   Solutions per problem: 23
+
+🎯 Pass Rate Statistics:
+   Mean pass rate: 0.6192 (61.92%)
+   Median pass rate: 0.6364 (63.64%)
+   Std deviation: 0.4317
+   Solutions per problem (variable): 93/4 = 23.0 avg
+   Pass@k statistics skipped (non-uniform solution distribution)
+   Min pass rate: 0.0000 (0.00%)
+   Max pass rate: 1.0000 (100.00%)
+   Total solutions with pass rate 1.0: 45
+   Percentiles:
+     25th: 0.0000 (0.00%)
+     50th: 0.6364 (63.64%)
+     75th: 1.0000 (100.00%)
+     90th: 1.0000 (100.00%)
+     95th: 1.0000 (100.00%)
+     99th: 1.0000 (100.00%)
+
+✅ Solution Quality Distribution:
+   Perfect solutions (100% pass): 45 (48.39%)
+   Partial solutions (0% < pass < 100%): 21 (22.58%)
+   Failed solutions (0% pass): 27 (29.03%)
+
+📈 Pass Rate Distribution (bins):
+   [0.0, 0.1): 27 solutions (29.03%)
+   [0.1, 0.2): 0 solutions (0.00%)
+   [0.2, 0.3): 2 solutions (2.15%)
+   [0.3, 0.4): 0 solutions (0.00%)
+   [0.4, 0.5): 0 solutions (0.00%)
+   [0.5, 0.6): 2 solutions (2.15%)
+   [0.6, 0.7): 16 solutions (17.20%)
+   [0.7, 0.8): 0 solutions (0.00%)
+   [0.8, 0.9): 0 solutions (0.00%)
+   [0.9, 1.0): 46 solutions (49.46%)
+
+🧩 Problem-level Analysis:
+   Average pass rate per problem: 0.5572 ± 0.2228
+   Best solution per problem: 1.0000 ± 0.0000
+   Worst solution per problem: 0.0000 ± 0.0000
+
+🎚️  Problem Difficulty (based on best solution):
+   Easy (≥80% pass): 4 (100.00%)
+   Medium (40-80% pass): 0 (0.00%)
+   Hard (<40% pass): 0 (0.00%)
+
+🧪 Test Case Analysis:
+   Total test cases: 1131
+   Passed test cases: 747 (66.05%)
+   Failed test cases: 384 (33.95%)
+   Overall test pass rate: 0.6605 (66.05%)
+   Avg test cases per solution: 12.16 ± 3.32
+   Min/Max test cases: 5/16
+
+   📋 Failure Reasons:
+     pass: 747 (66.05%)
+     fail: 234 (20.69%)
+     unexecuted: 147 (13.00%)
+     timeout: 3 (0.27%)
+
+   ❌ Error Analysis:
+     Test cases with errors: 61 (5.39%)
+     Top error messages:
+       32x (52.5%): name 'predictNextFourFib' is not defined
+       26x (42.6%): name 'max_weighted_path' is not defined
+       3x (4.9%): Timed out!
+
+   ⏱️  Timeout Analysis:
+     Timeout test cases: 3 (0.27%)
+
+   ⏰ Time Limit Analysis:
+     Average time limit: 1.00s ± 0.00s
+     Min/Max time limit: 1.00s / 1.00s
+     Time limit distribution:
+       1s: 1131 tests (100.00%)
+
+🏆 Top 5 Easiest Problems (by best solution pass rate):
+   1. Problem 3: 1.0000 (avg: 0.5623)
+   2. Problem 2: 1.0000 (avg: 0.2000)
+   3. Problem 1: 1.0000 (avg: 0.6667)
+   4. Problem 0: 1.0000 (avg: 0.8000)
+
+💀 Top 5 Hardest Problems (by best solution pass rate):
+   1. Problem 0: 1.0000 (avg: 0.8000)
+   2. Problem 1: 1.0000 (avg: 0.6667)
+   3. Problem 2: 1.0000 (avg: 0.2000)
+   4. Problem 3: 1.0000 (avg: 0.5623)
+================================================================================
