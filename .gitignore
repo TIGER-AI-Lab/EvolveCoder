@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL files
-__pycache__/
+**/__pycache__/
 *.py[codz]
 *$py.class
 
@@ -210,3 +210,5 @@ __marimo__/
 /gpu_request.sh
 /acecoderv2/synthesizer/outputs
 /test*
+/*.jsonl
+**/__pycache__/
