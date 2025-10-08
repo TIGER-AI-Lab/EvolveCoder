@@ -57,16 +57,16 @@ def main(
 
     print(f"📥 Loaded {len(data)} problems")
 
-    # Extract solutions and test cases
     solution_strs = []
     test_cases = []
     for item, gen_item in zip(data, gen_data):
+        base_tests = item['synthesis_result']['tests']
+        if base_tests == ["assert False"]:
+            base_tests = []
+        item['synthesis_result']['tests'] = gen_item['synthesis_result']['tests'] + base_tests
         for eval_result in gen_item['gen_result']['eval_results']:
             solution_strs.append(eval_result['parse_code'])
-            test_cases.append(
-                gen_item['synthesis_result']['tests'] + 
-                (item['synthesis_result']['tests'] if item['synthesis_result']['tests'] != ["assert False"] else [])
-            )
+            test_cases.append(item['synthesis_result']['tests'])
 
     print(f"🔧 Processing {len(solution_strs)} solutions...")
 

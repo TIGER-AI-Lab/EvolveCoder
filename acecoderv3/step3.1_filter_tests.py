@@ -42,6 +42,7 @@ def main(
             test for i, test in enumerate(item['synthesis_result']['tests'])
             if i not in low_mean_indexes
         ]
+        item['synthesis_result']['raw_tests'] = item['synthesis_result']['tests']
         item['synthesis_result']['tests'] = filtered_tests
         
         for eval_result in item['gen_result']['eval_results']:
