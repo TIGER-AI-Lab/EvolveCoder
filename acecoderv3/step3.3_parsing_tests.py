@@ -57,19 +57,13 @@ def main(
         
         # parse the response
         try:
-            print("##########")
             obj = parse_incomplete_json(gpt_response)
-            print(gpt_response)
-            print(obj.keys())
-            print(obj['tests'])
             tests = obj.get("tests", ERROR_TESTS)
         except Exception as e:
             print(f"Error parsing response: {e}")
             tests = ERROR_TESTS
         
         item['synthesis_result']['tests'] = tests
-        # print("gpt_question:", type(item['gpt_question']))
-        # print("tests:", type(item['tests']))
         return item
     
     # Process the dataset in parallel
@@ -94,5 +88,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step3.2_parsing_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.1_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
+python acecoderv3/step3.3_parsing_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.1_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
 """

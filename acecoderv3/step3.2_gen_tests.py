@@ -263,7 +263,6 @@ async def main_async(
             program3=item['solutions'][2],
             eval_tests=item['eval_matrix']
         )
-        print(prompt)
             
         messages = [{"role": "user", "content": prompt}]
         hash_id = hash_messages(messages)
