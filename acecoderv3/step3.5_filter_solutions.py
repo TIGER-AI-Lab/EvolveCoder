@@ -37,12 +37,9 @@ def main(
 
     def filter_solutions(item):
         item['outputs'] = []
-        item['outputs_g0'] = []
         test_case_diversity_arr = []
         for eval_result in item['gen_result']['eval_results']:
-            if eval_result['pass_rate'] > 0.9:
-                item['outputs_g0'].append(eval_result['parse_code'])
-            elif eval_result['pass_rate'] >= 0.1:
+            if eval_result['pass_rate'] >= 0.1:
                 item['outputs'].append(eval_result['parse_code'])
             else:
                 continue
@@ -76,10 +73,6 @@ def main(
     num_outputs_after = [len(x['outputs']) for x in tqdm(dataset, desc="Calculating avg outputs after filtering")]
     avg_after = np.mean(num_outputs_after)
     print(f"Average number of outputs after filtering: {avg_after:.2f}")
-    
-    num_outputs_g0_after = [len(x['outputs_g0']) for x in tqdm(dataset, desc="Calculating avg outputs_g0 after filtering")]
-    avg_after = np.mean(num_outputs_g0_after)
-    print(f"Average number of outputs_g0 after filtering: {avg_after:.2f}")
 
     dataset.to_json(output_file, orient="records", lines=True)
     print(f"Processed dataset saved to {output_file}")
