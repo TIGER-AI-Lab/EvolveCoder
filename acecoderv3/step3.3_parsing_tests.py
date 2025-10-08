@@ -88,5 +88,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step3.3_parsing_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.1_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
+python acecoderv3/step3.3_parsing_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.2_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
 """
