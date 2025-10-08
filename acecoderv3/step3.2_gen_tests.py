@@ -92,12 +92,7 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
         
     def process_item(item, idx):
         problem = item['synthesis_result']['problem']
-        assert len(item['synthesis_result']['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
-        zero_indexes = [i for i, x in enumerate(item['gen_result']['test_case_diversity']['mean']) if x == 0]
-        tests = [
-            test for i, test in enumerate(item['synthesis_result']['tests'])
-            if i not in zero_indexes
-        ]
+        tests = item['synthesis_result']['tests']
         
         pass_rates = [entry['pass_rate'] for entry in item['gen_result']['eval_results']]
         eval_results = [entry for entry in item['gen_result']['eval_results']]
@@ -115,11 +110,8 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
         for _, eval_result in selected:
             solutions.append(code_extract(eval_result['parse_code']))
             pass_status = []
-            for i, status in enumerate(eval_result['test_cases_pass_status']):
-                if i not in zero_indexes:
-                    pass_status.append(status['pass'])
-                else:
-                    assert status['pass'] == False, "pass status in zero indexes must be False"
+            for status in eval_result['test_cases_pass_status']:
+                pass_status.append(status['pass'])
             pass_matrix.append(pass_status)
         
         return {
@@ -404,5 +396,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step3.1_gen_tests.py acecoderv3/outputs/APPS/gpt_4.1_mini/step2.2_eval_Qwen3_4B_seed42_0_2.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
+python acecoderv3/step3.2_gen_tests.py acecoderv3/outputs/APPS/gpt_4.1_mini/step2.2_eval_Qwen3_4B_seed42_0_2.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
 """
