@@ -91,8 +91,8 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
     dataset = dataset.select(range(max_sample))
         
     def process_item(item, idx):
-        problem = item['synthesis_result']['problem']
-        tests = item['synthesis_result']['tests']
+        problem = item['problem']
+        tests = item['filtered_tests']
         
         pass_rates = [entry['pass_rate'] for entry in item['gen_result']['eval_results']]
         eval_results = [entry for entry in item['gen_result']['eval_results']]
@@ -112,13 +112,16 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
             pass_status = []
             for status in eval_result['test_cases_pass_status']:
                 pass_status.append(status['pass'])
+            assert len(pass_status) == len(tests), f"len(pass_status) {len(pass_status)} == len(tests) {len(tests)}"
             pass_matrix.append(pass_status)
         
         return {
             "id": item['id'],
             "problem": problem,
-            "tests": tests,
-            "solutions": solutions,
+            "raw_tests": item['raw_tests'],
+            "outputs": item['outputs'],
+            "filtered_tests": tests,
+            "sampled_solutions": solutions,
             "eval_matrix": pass_matrix
         }
         
@@ -152,10 +155,10 @@ async def process_batch_async(
         # Prepare prompt
         prompt = PROMPT_TEMPLATE_RAW.format(
             question=item['problem'],
-            tests=item['tests'],
-            program1=item['solutions'][0],
-            program2=item['solutions'][1],
-            program3=item['solutions'][2],
+            tests=item['filtered_tests'],
+            program1=item['sampled_solutions'][0],
+            program2=item['sampled_solutions'][1],
+            program3=item['sampled_solutions'][2],
             eval_tests=item['eval_matrix']
         )
         
@@ -233,10 +236,7 @@ async def main_async(
         return
 
     # Preprocess dataset
-    print("start processing")
-    print(num_proc)
     dataset = preprocess_dataset(file_path, max_sample=max_samples, num_proc=num_proc)
-    print("finish processing")
     data = list(dataset)  # Convert to list for easier processing
 
     # Load existing cache
@@ -253,14 +253,13 @@ async def main_async(
     final_results = []
     
     for i, item in enumerate(data):
-        print(item['eval_matrix'])
         # Prepare messages to get hash_id
         prompt = PROMPT_TEMPLATE_RAW.format(
             question=item['problem'],
-            tests=item['tests'],
-            program1=item['solutions'][0],
-            program2=item['solutions'][1],
-            program3=item['solutions'][2],
+            tests=item['filtered_tests'],
+            program1=item['sampled_solutions'][0],
+            program2=item['sampled_solutions'][1],
+            program3=item['sampled_solutions'][2],
             eval_tests=item['eval_matrix']
         )
             
@@ -395,5 +394,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step3.2_gen_tests.py acecoderv3/outputs/APPS/gpt_4.1_mini/step2.2_eval_Qwen3_4B_seed42_0_2.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
+python acecoderv3/step3.2_gen_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.1_filter_tests_round_1.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
 """

@@ -36,14 +36,15 @@ def main(
     dataset = datasets.Dataset.from_json(file_path)
 
     def filter_test_cases(item):
-        assert len(item['synthesis_result']['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
+        assert len(item['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
         low_mean_indexes = [i for i, x in enumerate(item['gen_result']['test_case_diversity']['mean']) if x < 0.1]
         filtered_tests = [
-            test for i, test in enumerate(item['synthesis_result']['tests'])
+            test for i, test in enumerate(item['tests'])
             if i not in low_mean_indexes
         ]
-        item['synthesis_result']['raw_tests'] = item['synthesis_result']['tests']
-        item['synthesis_result']['tests'] = filtered_tests
+        item['raw_tests'] = item['tests']
+        item['filtered_tests'] = filtered_tests
+        item.pop('tests', None)
         
         for eval_result in item['gen_result']['eval_results']:
             pass_status = []
@@ -75,7 +76,7 @@ def main(
 
         return item
     
-    num_tests_before = [len(x['synthesis_result']['tests']) for x in tqdm(dataset, desc="Calculating avg test cases before filtering")]
+    num_tests_before = [len(x['tests']) for x in tqdm(dataset, desc="Calculating avg test cases before filtering")]
     avg_before = np.mean(num_tests_before)
     print(f"Average number of test cases before filtering: {avg_before:.2f}")
     
@@ -86,7 +87,7 @@ def main(
         desc="Filtering test cases",
     )
     
-    num_tests_after = [len(x['synthesis_result']['tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
+    num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
     avg_after = np.mean(num_tests_after)
     print(f"Average number of test cases after filtering: {avg_after:.2f}")
 

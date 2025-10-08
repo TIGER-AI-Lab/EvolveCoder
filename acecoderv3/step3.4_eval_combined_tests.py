@@ -14,18 +14,17 @@ LAST_STEP_NAME = "step3.3_parsing_tests"
 
 def main(
     file_path: str,
-    gen_file_path: str,
     output_dir: str = None,
     overwrite: bool = False,
     num_proc: int = 64,
+    round: int = 1,
     max_samples: Optional[int] = 0
 ):
     output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
     print(FILE_NAME)
-    new_file_name = Path(file_path).stem.replace(LAST_STEP_NAME, FILE_NAME)
-    output_file = output_dir / f"{new_file_name}.jsonl"
-    stats_output_file = output_dir / f"{new_file_name}_stats.txt"
+    output_file = output_dir / f"{FILE_NAME}_round_{round}.jsonl"
+    stats_output_file = output_dir / f"{FILE_NAME}_stats_round_{round}.txt"
     
     if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
@@ -46,27 +45,21 @@ def main(
     else:
         raise ValueError("Unsupported file format. Please provide a .jsonl or .json file.")
     
-    with open(gen_file_path, 'r') as f:
-        gen_data = [json.loads(line) for line in f.readlines()]
-    
     if max_samples > 0 and len(data) > max_samples:
         random.seed(42)  # For reproducibility
         random_idxs = set(random.sample(range(len(data)), max_samples))
         data = [data[i] for i in range(len(data)) if i in random_idxs]
-        gen_data = [gen_data[i] for i in range(len(gen_data)) if i in random_idxs]
 
     print(f"📥 Loaded {len(data)} problems")
 
     solution_strs = []
     test_cases = []
-    for item, gen_item in zip(data, gen_data):
-        base_tests = item['synthesis_result']['tests']
-        if base_tests == ["assert False"]:
-            base_tests = []
-        item['synthesis_result']['tests'] = gen_item['synthesis_result']['tests'] + base_tests
-        for eval_result in gen_item['gen_result']['eval_results']:
-            solution_strs.append(eval_result['parse_code'])
-            test_cases.append(item['synthesis_result']['tests'])
+    for item in data:
+        gen_tests = item['synthesis_result']['tests']
+        eval_tests = item['filtered_tests'] + gen_tests
+        for output in item['outputs']:
+            solution_strs.append(output)
+            test_cases.append(eval_tests)
 
     print(f"🔧 Processing {len(solution_strs)} solutions...")
 
@@ -96,11 +89,11 @@ def main(
 
     # Reassign results back to original data structure
     idx = 0
-    for item, gen_item in zip(data, gen_data):
+    for item in data:
         item['gen_result'] = {}
         item['gen_result']['eval_results'] = []
         test_case_diversity_arr = []
-        for _ in range(len(gen_item['gen_result']['eval_results'])):
+        for _ in range(len(item['outputs'])):
             item['gen_result']['eval_results'].append({
                 'pass_rate': pass_rates[idx],
                 'test_cases_pass_status': test_cases_pass_status[idx],
@@ -133,6 +126,6 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3/step3.4_eval_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.3_parsing_tests_round_1.jsonl --gen_file_path acecoderv3/outputs/all_20/gpt_4.1_mini/step3.1_filter_tests_round_1.jsonl
+python acecoderv3/step3.4_combine_eval_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.3_parsing_tests_round_1.jsonl --round 1
 """
 

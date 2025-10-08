@@ -18,7 +18,7 @@ from acecoderv2.synthesizer.utils import (
 
 FILE_NAME = Path(__file__).stem
 ERROR_QUESTION = "Error in question generation"
-ERROR_TESTS = ["assert False"]
+ERROR_TESTS = []
 
 def filter_parsed_items(item):
     """
@@ -64,6 +64,8 @@ def main(
             tests = ERROR_TESTS
         
         item['synthesis_result']['tests'] = tests
+        item.pop('sampled_solutions', None)
+        item.pop('eval_matrix', None)
         return item
     
     # Process the dataset in parallel

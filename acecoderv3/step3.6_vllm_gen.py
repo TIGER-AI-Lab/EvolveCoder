@@ -34,7 +34,8 @@ def preprocess_prompts_auto(
     prompts = []
     for item in data:
         means = item['test_case_diversity']['mean']
-        tests = item['synthesis_result']['tests']
+        gen_tests = item['synthesis_result']['tests']
+        tests = item['filtered_tests'] + gen_tests
         assert len(means) == len(tests), f"len(means) {len(means)} == len(tests) {len(tests)}"
         idx = [i for i, m in enumerate(means) if 0.1 <= m <= 0.5]
         if len(idx) < 5:
@@ -80,6 +81,7 @@ def main(
     max_tokens: int = 32768,
     overwrite: bool = False,
     device_id: str = None,
+    round: int = 1,
     **vllm_kwargs
 ):
     if device_id is not None:
@@ -90,13 +92,13 @@ def main(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if start_idx is None and end_idx is None:
-        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}.cache.jsonl"
-        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}.jsonl"
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_round_{round}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_round_{round}.jsonl"
     else:
         if end_idx is None:
             end_idx = len(data)
-        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.cache.jsonl"
-        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}.jsonl"
+        cache_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}_round_{round}.cache.jsonl"
+        output_file = output_dir / f"{FILE_NAME}_{pretty_name(model_name_or_path)}_seed{seed}_{start_idx}_{end_idx}_round_{round}.jsonl"
 
     if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
@@ -228,6 +230,7 @@ def main(
     # Save final results
     with open(output_file, 'w') as f:
         for item in final_results:
+            item.pop('test_case_diversity', None)
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
     print(f"Final results saved to {output_file}")
     
@@ -249,5 +252,6 @@ python acecoderv3/step3.6_vllm_gen.py acecoderv3/outputs/all_20/gpt_4.1_mini/ste
     --top_k=20 \
     --temperature=0.6 \
     --max_tokens=32768 \
-    --tensor_parallel_size=1
+    --tensor_parallel_size=1 \
+    --round 1
 """

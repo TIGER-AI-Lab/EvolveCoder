@@ -10,20 +10,21 @@ import numpy as np
 from collections import Counter
 
 FILE_NAME = Path(__file__).stem
-LAST_STEP_NAME = "step2.1_gen"
+LAST_STEP_NAME = "step3.6_gen"
 
 def main(
     file_path: str,
     output_dir: str = None,
     overwrite: bool = False,
     num_proc: int = 64,
+    round: int = 1,
     max_samples: Optional[int] = 0
 ):
     output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
-    new_file_name = Path(file_path).stem.replace(LAST_STEP_NAME, FILE_NAME)
-    output_file = output_dir / f"{new_file_name}.jsonl"
-    stats_output_file = output_dir / f"{new_file_name}_stats.txt"
+    print(FILE_NAME)
+    output_file = output_dir / f"{FILE_NAME}_round_{round}.jsonl"
+    stats_output_file = output_dir / f"{FILE_NAME}_stats_round_{round}.txt"
     
     if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists. Use --overwrite to overwrite.")
@@ -51,13 +52,14 @@ def main(
 
     print(f"📥 Loaded {len(data)} problems")
 
-    # Extract solutions and test cases
     solution_strs = []
     test_cases = []
     for item in data:
-        for llm_output in item['gen_result']['outputs']:
-            solution_strs.append(llm_output)
-            test_cases.append(item['synthesis_result']['tests'])
+        eval_tests = item['raw_tests'] + item['synthesis_result']['tests']
+        outputs = item['outputs'] + item['gen_result']['outputs']
+        for output in outputs:
+            solution_strs.append(output)
+            test_cases.append(eval_tests)
 
     print(f"🔧 Processing {len(solution_strs)} solutions...")
 
@@ -88,14 +90,20 @@ def main(
     # Reassign results back to original data structure
     idx = 0
     for item in data:
+        item['outputs'] = item['outputs'] + item['gen_result']['outputs']
+        item['tests'] = item['raw_tests'] + item['synthesis_result']['tests']
+        item.pop('raw_tests', None)
+        item.pop('filtered_tests', None)
+        item['gen_result'] = {}
         item['gen_result']['eval_results'] = []
         test_case_diversity_arr = []
-        for _ in range(len(item['gen_result']['outputs'])):
+        for _ in range(len(item['outputs'])):
             item['gen_result']['eval_results'].append({
                 'pass_rate': pass_rates[idx],
                 'test_cases_pass_status': test_cases_pass_status[idx],
                 'parse_code': dataset['parse_code'][idx]
             })
+            item['gen_result'].pop('outputs', None)  # Remove outputs to save space
             test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
             idx += 1
         test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
@@ -103,11 +111,6 @@ def main(
             "arr": test_case_diversity_arr,
             "mean": np.mean(test_case_diversity_arr, axis=1).tolist(),
         }
-        item['outputs'] = item['gen_result']['outputs']
-        item['problem'] = item['synthesis_result']['problem']
-        item['tests'] = item['synthesis_result']['tests']
-        item.pop('program', None)
-        item['gen_result'].pop('outputs', None)  # Remove outputs to save space
 
     
 
@@ -127,6 +130,6 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3/step2.2_eval.py acecoderv3/outputs/APPS/gpt_4.1_mini/step2.1_gen_Qwen3_4B_seed42_0_2.jsonl
+python acecoderv3/step3.7_final_eval.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.6_gen_Qwen3_4B_seed42_0_50_round_1.jsonl --round 1
 """
 

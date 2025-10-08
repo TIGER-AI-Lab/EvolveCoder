@@ -35,16 +35,18 @@ def main(
 
     dataset = datasets.Dataset.from_json(file_path)
 
-    def filter_solutions(item):
-        item['filtered_outputs'] = []
+    def filter_outputs(item):
+        assert len(item['outputs']) == len(item['gen_result']['eval_results']), f"len(item['outputs']) {len(item['outputs'])} == len(item['gen_result']['eval_results']) {len(item['gen_result']['eval_results'])}"
+        filtered_outputs = []
         test_case_diversity_arr = []
         for eval_result in item['gen_result']['eval_results']:
             if eval_result['pass_rate'] >= 0.1:
-                item['filtered_outputs'].append(eval_result['parse_code'])
+                filtered_outputs.append(eval_result['parse_code'])
             else:
                 continue
             passes = [x['pass'] for x in eval_result['test_cases_pass_status']]
             test_case_diversity_arr.append(passes)
+        item['outputs'] = filtered_outputs
 
         if test_case_diversity_arr:
             test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
@@ -59,18 +61,18 @@ def main(
 
         return item
     
-    num_outputs_before = [len(x['gen_result']['eval_results']) for x in tqdm(dataset, desc="Calculating avg outputs before filtering")]
+    num_outputs_before = [len(x['outputs']) for x in tqdm(dataset, desc="Calculating avg outputs before filtering")]
     avg_before = np.mean(num_outputs_before)
     print(f"Average number of outputs before filtering: {avg_before:.2f}")
     
     # Process the dataset in parallel
     dataset = dataset.map(
-        filter_solutions,
+        filter_outputs,
         num_proc=num_proc,
         desc="Filtering outputs",
     )
     
-    num_outputs_after = [len(x['filtered_outputs']) for x in tqdm(dataset, desc="Calculating avg outputs after filtering")]
+    num_outputs_after = [len(x['outputs']) for x in tqdm(dataset, desc="Calculating avg outputs after filtering")]
     avg_after = np.mean(num_outputs_after)
     print(f"Average number of outputs after filtering: {avg_after:.2f}")
 
