@@ -84,5 +84,5 @@ if __name__ == "__main__":
 
 
 """
-python acecoderv3/step3.5_filter_solutions.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.4_combine_eval_tests_round_1.jsonl --num_proc 16 --round 1
+python acecoderv3/step3.5_filter_solutions.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --num_proc 16 --round 1
 """

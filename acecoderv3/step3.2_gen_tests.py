@@ -5,6 +5,10 @@ import random
 import asyncio
 import aiohttp
 from typing import List, Optional, Tuple
+from multiprocessing import Pool
+from functools import partial
+from multiprocessing.pool import ThreadPool
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from fire import Fire
 from tqdm.asyncio import tqdm
 from pathlib import Path
@@ -61,16 +65,81 @@ Reference solutions:
 ```python
 {program3}
 ```
+```python
+{program4}
+```
 
 Existing tests:
 {tests}
 
-Evaluation results (rows = tests, cols = [p1,p2,p3]):
+Evaluation results (rows = programs, cols = tests):
 {eval_tests}
 
 Output format (JSON array of strings):
 {{"tests": ["assert ...", "assert ..."]}}.
 """
+
+
+def select_lists(lists):
+    if len(lists[0]) == 0:
+        num_to_select = min(4, len(lists))
+        return random.sample(range(len(lists)), num_to_select)
+
+    max_true_count = 0
+    max_true_index = None
+    for i, lst in enumerate(lists):
+        true_count = sum(lst)
+        if true_count > max_true_count:
+            max_true_count = true_count
+            max_true_index = i
+
+    filtered_indices = []
+    for i, lst in enumerate(lists):
+        if i == max_true_index:
+            continue
+        true_ratio = sum(lst) / len(lst)
+        if 0.4 <= true_ratio <= 0.9:
+            filtered_indices.append(i)
+
+    selected_indices = []
+
+    if len(filtered_indices) == 3:
+        selected_indices = filtered_indices
+    elif len(filtered_indices) > 3:
+        max_min_distance = -1
+        best_triple = None
+
+        for i in range(len(filtered_indices)):
+            for j in range(i + 1, len(filtered_indices)):
+                for k in range(j + 1, len(filtered_indices)):
+                    idx_i, idx_j, idx_k = filtered_indices[i], filtered_indices[j], filtered_indices[k]
+
+                    dist_ij = sum(a != b for a, b in zip(lists[idx_i], lists[idx_j]))
+                    dist_ik = sum(a != b for a, b in zip(lists[idx_i], lists[idx_k]))
+                    dist_jk = sum(a != b for a, b in zip(lists[idx_j], lists[idx_k]))
+
+                    min_distance = min(dist_ij, dist_ik, dist_jk)
+
+                    total_distance = dist_ij + dist_ik + dist_jk
+
+                    if (min_distance > max_min_distance or
+                            (min_distance == max_min_distance and total_distance > max_min_distance)):
+                        max_min_distance = min_distance
+                        best_triple = (idx_i, idx_j, idx_k)
+
+        selected_indices = list(best_triple)
+    else:
+        candidates = []
+        for i, lst in enumerate(lists):
+            if i != max_true_index:
+                true_ratio = sum(lst) / len(lst)
+                if true_ratio >= 0.4:
+                    candidates.append((i, true_ratio))
+
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        selected_indices = [idx for idx, _ in candidates[:3]]
+
+    return [max_true_index] + selected_indices
 
 
 def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.Dataset:
@@ -93,27 +162,32 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
     def process_item(item, idx):
         problem = item['problem']
         tests = item['filtered_tests']
+        assert len(item['outputs']) == len(item['gen_result']['eval_results']), f"len(item['outputs']) {len(item['outputs'])} == len(item['gen_result']['eval_results']) {len(item['gen_result']['eval_results'])}"
         
-        pass_rates = [entry['pass_rate'] for entry in item['gen_result']['eval_results']]
-        eval_results = [entry for entry in item['gen_result']['eval_results']]
-        assert len(pass_rates) == len(eval_results), f"len(pass_rates) == len(eval_results), {len(pass_rates)} == {len(eval_results)}"
-        
-        top_k = 3
-        threshold = 0.6
-        filtered = [(r, e) for r, e in zip(pass_rates, eval_results) if r > threshold]
-        if len(filtered) >= top_k:
-            selected = random.sample(filtered, top_k)
-        else:
-            selected = sorted(zip(pass_rates, eval_results), key=lambda x: x[0], reverse=True)
-        solutions = []
-        pass_matrix = []
-        for _, eval_result in selected:
-            solutions.append(code_extract(eval_result['parse_code']))
+        eval_lists = []
+        for eval_result in item['gen_result']['eval_results']:
             pass_status = []
             for status in eval_result['test_cases_pass_status']:
                 pass_status.append(status['pass'])
             assert len(pass_status) == len(tests), f"len(pass_status) {len(pass_status)} == len(tests) {len(tests)}"
-            pass_matrix.append(pass_status)
+            eval_lists.append(pass_status)
+        assert len(eval_lists) > 0, f"len(eval_lists) {len(eval_lists)} > 0"
+        
+        eval_index = select_lists(eval_lists)
+        assert len(eval_index) == 4, f"len(eval_index) {len(eval_index)} == 4"
+        solutions = []
+        eval_matrix = []
+        for idx in eval_index:
+            assert len(eval_lists[idx]) == len(tests), f"len(eval_lists[idx]) {len(eval_lists[idx])} == len(tests) {len(tests)}"
+            eval_matrix.append(eval_lists[idx])
+            solutions.append(item['gen_result']['eval_results'][idx]['parse_code'])
+        eval_matrix_str = "[\n" + "\n".join(
+                "    " + str(row) + "," for row in eval_matrix
+            ) + "\n]"
+        
+        pass_rates = [entry['pass_rate'] for entry in item['gen_result']['eval_results']]
+        eval_results = [entry for entry in item['gen_result']['eval_results']]
+        assert len(pass_rates) == len(eval_results), f"len(pass_rates) == len(eval_results), {len(pass_rates)} == {len(eval_results)}"
         
         return {
             "id": item['id'],
@@ -122,7 +196,7 @@ def preprocess_dataset(file_path: str, max_sample=None, num_proc=4) -> datasets.
             "outputs": item['outputs'],
             "filtered_tests": tests,
             "sampled_solutions": solutions,
-            "eval_matrix": pass_matrix
+            "eval_matrix": eval_matrix_str
         }
         
     dataset = dataset.map(
@@ -138,7 +212,6 @@ async def process_batch_async(
     client: OpenAIAsyncClient,
     batch_items: List[dict],
     model_name: str,
-    round: int,
     max_tokens: int,
     cache_file: Path,
     max_concurrent: int = 10,
@@ -159,6 +232,7 @@ async def process_batch_async(
             program1=item['sampled_solutions'][0],
             program2=item['sampled_solutions'][1],
             program3=item['sampled_solutions'][2],
+            program4=item['sampled_solutions'][3],
             eval_tests=item['eval_matrix']
         )
         
@@ -178,6 +252,7 @@ async def process_batch_async(
         
         # Update item with response
         result_item = item.copy()
+        result_item['synthesis_result']['gpt_prompt'] = prompt
         result_item['synthesis_result']['gpt_response'] = response[0]
         return result_item
     
@@ -260,6 +335,7 @@ async def main_async(
             program1=item['sampled_solutions'][0],
             program2=item['sampled_solutions'][1],
             program3=item['sampled_solutions'][2],
+            program4=item['sampled_solutions'][3],
             eval_tests=item['eval_matrix']
         )
             
@@ -299,7 +375,6 @@ async def main_async(
                 client=client,
                 batch_items=batch_items,
                 model_name=model_name,
-                round=round,
                 max_tokens=max_tokens,
                 cache_file=cache_file,
                 max_concurrent=max_concurrent,

@@ -59,6 +59,8 @@ def main(
         try:
             obj = parse_incomplete_json(gpt_response)
             tests = obj.get("tests", ERROR_TESTS)
+            if tests is None:
+                tests = []
         except Exception as e:
             print(f"Error parsing response: {e}")
             tests = ERROR_TESTS

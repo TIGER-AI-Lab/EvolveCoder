@@ -2,7 +2,7 @@ import fire
 import json
 import datasets
 import random
-from acecoderv2.code_eval import eval_codes, parse_code
+from acecoderv3.code_eval import eval_codes, parse_code
 from acecoderv2.synthesizer.utils import print_statistics
 from typing import List, Union, Optional
 from pathlib import Path
@@ -77,13 +77,16 @@ def main(
     dataset = dataset.map(parse_code_func, num_proc=num_proc, desc="Parsing code")
 
     print("⚡ Evaluating codes...")
-    pass_rates, test_cases_pass_status = eval_codes(
+    pass_rates, test_cases_info = eval_codes(
         solution_strs=dataset['parse_code'],
         test_cases=dataset['test_case'],
         return_test_cases_pass_status=True,
         binary=False,
         num_processes=num_proc,
     )
+    
+    test_cases_pass_status = [info['details'] for info in test_cases_info]
+    extracted_codes = [info['extracted_code'] for info in test_cases_info]
 
     # Reassign results back to original data structure
     idx = 0
@@ -94,7 +97,7 @@ def main(
             item['gen_result']['eval_results'].append({
                 'pass_rate': pass_rates[idx],
                 'test_cases_pass_status': test_cases_pass_status[idx],
-                'parse_code': dataset['parse_code'][idx]
+                'parse_code': extracted_codes[idx]
             })
             test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
             idx += 1

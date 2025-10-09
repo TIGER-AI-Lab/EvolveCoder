@@ -34,8 +34,7 @@ def preprocess_prompts_auto(
     prompts = []
     for item in data:
         means = item['test_case_diversity']['mean']
-        gen_tests = item['synthesis_result']['tests']
-        tests = item['filtered_tests'] + gen_tests
+        tests = item['filtered_tests'] + item['synthesis_result']['tests']
         assert len(means) == len(tests), f"len(means) {len(means)} == len(tests) {len(tests)}"
         idx = [i for i, m in enumerate(means) if 0.1 <= m <= 0.5]
         if len(idx) < 5:

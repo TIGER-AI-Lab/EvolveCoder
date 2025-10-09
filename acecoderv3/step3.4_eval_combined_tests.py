@@ -2,7 +2,7 @@ import fire
 import json
 import datasets
 import random
-from acecoderv2.code_eval import eval_codes, parse_code
+from acecoderv3.code_eval import eval_codes, parse_code
 from acecoderv2.synthesizer.utils import print_statistics
 from typing import List, Union, Optional
 from pathlib import Path
@@ -55,8 +55,7 @@ def main(
     solution_strs = []
     test_cases = []
     for item in data:
-        gen_tests = item['synthesis_result']['tests']
-        eval_tests = item['filtered_tests'] + gen_tests
+        eval_tests = item['filtered_tests'] + item['synthesis_result']['tests']
         for output in item['outputs']:
             solution_strs.append(output)
             test_cases.append(eval_tests)
@@ -79,13 +78,16 @@ def main(
     dataset = dataset.map(parse_code_func, num_proc=num_proc, desc="Parsing code")
 
     print("⚡ Evaluating codes...")
-    pass_rates, test_cases_pass_status = eval_codes(
+    pass_rates, test_cases_info = eval_codes(
         solution_strs=dataset['parse_code'],
         test_cases=dataset['test_case'],
         return_test_cases_pass_status=True,
         binary=False,
         num_processes=num_proc,
     )
+    
+    test_cases_pass_status = [info['details'] for info in test_cases_info]
+    # extracted_codes = [info['extracted_code'] for info in test_cases_info]
 
     # Reassign results back to original data structure
     idx = 0
@@ -126,6 +128,6 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3/step3.4_combine_eval_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.3_parsing_tests_round_1.jsonl --round 1
+python acecoderv3/step3.4_eval_combined_tests.py acecoderv3/outputs/all_20/gpt_4.1_mini/step3.3_parsing_tests_round_1.jsonl --round 1
 """
 
