@@ -29,46 +29,25 @@ def get_filtered_indexes(test_pass_matrix):
     return filtered_indexes
 
 
-def group_by_pass_pattern(test_pass_matrix, filtered_indexes):
-    groups = defaultdict(list)
-    for i, passes in enumerate(test_pass_matrix):
-        if i not in filtered_indexes:
-            groups[tuple(passes)].append(i)
-    return groups
-
-
-def get_duplicate_indexes(groups):
-    duplicate_indexes = set()
-    for _, indices in groups.items():
-        if len(indices) > 1:
-            kept = random.choice(indices)
-            duplicate_indexes |= {idx for idx in indices if idx != kept}
-    return duplicate_indexes
-
-
 def update_item_with_filtered_tests(item, all_removed_indexes):
     filtered_tests = [
         test for i, test in enumerate(item['tests'])
         if i not in all_removed_indexes
     ]
 
-    if not filtered_tests:
-        filtered_tests = ['assert False']
-        for eval_result in item['gen_result']['eval_results']:
-            eval_result['test_cases_pass_status'].append({'pass': False})
-
     item['raw_tests'] = item['tests']
     item['filtered_tests'] = filtered_tests
     item.pop('tests', None)
 
-    for eval_result in item['gen_result']['eval_results']:
-        filtered_statuses = [
-            status for i, status in enumerate(eval_result['test_cases_pass_status'])
-            if i not in all_removed_indexes
-        ]
-        eval_result['test_cases_pass_status'] = filtered_statuses
-        passes = [s['pass'] for s in filtered_statuses]
-        eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
+    if filtered_tests:
+        for eval_result in item['gen_result']['eval_results']:
+            filtered_statuses = [
+                status for i, status in enumerate(eval_result['test_cases_pass_status'])
+                if i not in all_removed_indexes
+            ]
+            eval_result['test_cases_pass_status'] = filtered_statuses
+            passes = [s['pass'] for s in filtered_statuses]
+            eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
 
 
 def compute_test_case_diversity(item):
@@ -89,18 +68,18 @@ def compute_test_case_diversity(item):
 
     return {"arr": arr, "mean": mean_arr}
 
+
 def filter_test_cases(item):
     assert len(item['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
 
     matrix = build_test_pass_matrix(item)
     filtered_indexes = get_filtered_indexes(matrix)
-    groups = group_by_pass_pattern(matrix, filtered_indexes)
-    duplicates = get_duplicate_indexes(groups)
-    all_removed = set(filtered_indexes) | duplicates
+    all_removed = set(filtered_indexes)
 
     update_item_with_filtered_tests(item, all_removed)
 
-    item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
+    if item['filtered_tests']:
+        item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
 
     return item
 
@@ -131,6 +110,16 @@ def main(
         num_proc=num_proc,
         desc="Filtering test cases",
     )
+    
+    num_before_removal = len(dataset)
+    dataset = dataset.filter(
+        lambda x: len(x['filtered_tests']) > 0,
+        num_proc=num_proc,
+        desc="Removing items with empty filtered_tests"
+    )
+    num_after_removal = len(dataset)
+    print(f"Removed {num_before_removal - num_after_removal} items with no valid test cases")
+
     
     num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
     avg_after = np.mean(num_tests_after)
