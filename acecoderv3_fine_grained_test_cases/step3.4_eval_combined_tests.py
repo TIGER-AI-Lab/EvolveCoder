@@ -92,8 +92,9 @@ def main(
     # Reassign results back to original data structure
     idx = 0
     for item in data:
+        item['tests'] = item['raw_tests'] + item['synthesis_result']['tests']
         item.pop('filtered_tests', None)
-        item['raw_tests'] += item['synthesis_result']['tests']
+        item.pop('raw_tests', None)
         item['gen_result'] = {}
         item['gen_result']['eval_results'] = []
         test_case_diversity_arr = []
