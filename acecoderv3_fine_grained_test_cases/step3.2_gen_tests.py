@@ -30,50 +30,6 @@ from acecoderv2.synthesizer.utils import (
 )
 from acecoderv2.synthesizer.openai_utils import generate_with_retry, OpenAIAsyncClient
 
-# PROMPT_TEMPLATE_RAW = """system:
-# You are an advanced AI system specialized in generating corner and stress test cases with full coverage of diverse scenarios. You will receive a coding prompt, two highest-pass-rate programs, and three most divergent programs evaluated on the current test cases, along with the test cases and their evaluation results.
-
-# Please generate 20 upgraded assert-based test cases that satisfy the following requirements:
-# - Cover the missed points of existing test cases without repetition.
-# - Expose weaknesses in the highest-pass-rate programs.
-# - Stress-test uncovered edge cases.
-# - Ensure comprehensive coverage across both typical and boundary scenarios.
-# - All test cases must be correct according to the problem, not based on any specific implementation.
-# - Use constant values (no randomness or external resource calls).
-# - Be independent of other test cases.
-# - Include both input parameters and expected output.
-
-# user:
-# Question: 
-# {question}
-
-# Programs:
-# ```python
-# {program1}
-# ```
-# ```python
-# {program2}
-# ```
-# ```python
-# {program3}
-# ```
-# ```python
-# {program4}
-# ```
-# ```python
-# {program5}
-# ```
-
-# Existing tests:
-# {tests}
-
-# Evaluation results (rows = programs, cols = tests):
-# {eval_tests}
-
-# Output format (JSON array of strings):
-# {{"tests": ["assert ...", "assert ..."]}}.
-# """
-
 
 PROMPT_TEMPLATE_RAW = """system:
 You are an advanced AI system specialized in generating *adversarial and diverse* test cases that reveal subtle weaknesses in high-performing programs.
@@ -83,9 +39,9 @@ Your task is to create 20 new assert-based test cases that significantly upgrade
 
 The new test cases must satisfy the following requirements:
 - Focus on **challenging high-pass-rate programs** — design cases likely to make at least one top-performing solution fail.
-- Include **diverse input patterns** that challenge different dimensions of the problem space
+- Include **diverse input patterns** that challenge different dimensions of the problem space.
 - **Avoid repetition** — do not duplicate existing test cases or trivial variations.
-- All test cases must be correct according to the problem, not based on any specific implementation.
+- All test cases must be correct according to the problem definition, not based on any specific program.
 - Be independent of other test cases.
 - Use constant values (no randomness or external resource calls).
 - Include both input parameters and expected output.
@@ -146,10 +102,7 @@ def select_programs(eval_lists):
                         best, max_min, max_total = (a, b, c), min_d, total_d
         return list(best)
 
-    n = len(eval_lists)
-    assert len(eval_lists) >= 5, 'at least five programs per quesrion'
-    if len(eval_lists[0]) == 0:
-        return random.sample(range(n), min(5, n))
+    assert len(eval_lists) >= 5, 'At least five programs per quesrion'
 
     pass_rates = compute_pass_rates()
     sorted_by_rate = sorted(pass_rates.items(), key=lambda x: x[1], reverse=True)

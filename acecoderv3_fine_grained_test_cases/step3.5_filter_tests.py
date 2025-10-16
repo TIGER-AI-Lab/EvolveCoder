@@ -33,10 +33,10 @@ def build_test_pass_matrix(item):
     return matrix
 
 
-def get_filtered_indexes(test_pass_matrix):
+def get_filtered_test_indexes(test_pass_matrix):
     filtered_indexes = [
         i for i, passes in enumerate(test_pass_matrix)
-        if not any(passes)
+        if sum(passes) / len(passes) < 0.1
     ]
     return filtered_indexes
 
@@ -105,7 +105,7 @@ def filter_test_cases(item):
     assert len(item['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
 
     matrix = build_test_pass_matrix(item)
-    filtered_indexes = get_filtered_indexes(matrix)
+    filtered_indexes = get_filtered_test_indexes(matrix)
     groups = group_by_pass_pattern(matrix, filtered_indexes)
     duplicates = get_duplicate_indexes(groups)
     all_removed = set(filtered_indexes) | duplicates
