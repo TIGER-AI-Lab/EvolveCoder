@@ -41,15 +41,6 @@ def get_filtered_test_indexes(test_pass_matrix):
     return filtered_indexes
 
 
-def get_filtered_outputs_indexes(item):
-    filtered_indexes = []
-    for idx, eval_result in enumerate(item['gen_result']['eval_results']):
-        pass_rate = eval_result['pass_rate']
-        if pass_rate < 0.1:
-            filtered_indexes.append(idx)
-    return filtered_indexes
-
-
 def group_by_pass_pattern(test_pass_matrix, filtered_indexes):
     groups = defaultdict(list)
     for i, passes in enumerate(test_pass_matrix):
@@ -73,41 +64,52 @@ def update_item_with_filtered_tests(item, all_removed_indexes):
         if i not in all_removed_indexes
     ]
 
-    if not filtered_tests:
-        filtered_tests = ['assert False']
-        for eval_result in item['gen_result']['eval_results']:
-            eval_result['test_cases_pass_status'].append({'pass': False})
-
     item['raw_tests'] = item['tests']
     item['filtered_tests'] = filtered_tests
     item.pop('tests', None)
+    
+    if filtered_tests:
+        for eval_result in item['gen_result']['eval_results']:
+            filtered_statuses = [
+                status for i, status in enumerate(eval_result['test_cases_pass_status'])
+                if i not in all_removed_indexes
+            ]
+            eval_result['test_cases_pass_status'] = filtered_statuses
+            passes = [s['pass'] for s in filtered_statuses]
+            eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
 
 
-def update_item_with_filtered_outputs(item, filtered_solution_indexes):
-    num_solutions = len(item['outputs'])
-    
-    kept_indexes = [i for i in range(num_solutions) if i not in filtered_solution_indexes]
-    
-    item['raw_outputs'] = item['outputs']
-    item['filtered_outputs'] = [
-        item['outputs'][i] for i in kept_indexes
+def compute_test_case_diversity(item):
+    arr = [
+        [x['pass'] for x in eval_result['test_cases_pass_status']]
+        for eval_result in item['gen_result']['eval_results']
     ]
-    item.pop('outputs', None)
-    item.pop('gen_result', None)
+
+    if not arr:
+        return {"arr": [], "mean": []}
+
+    try:
+        arr = np.array(arr).T.tolist()
+        mean_arr = np.mean(arr, axis=1).tolist()
+    except Exception as e:
+        print(f"[Error in compute_test_case_diversity] {type(e).__name__}: {e}")
+        raise
+
+    return {"arr": arr, "mean": mean_arr}
 
 
-def filter_tests_and_solutions(item):
+def filter_test_cases(item):
+    assert len(item['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
+
     matrix = build_test_pass_matrix(item)
-    filtered_test_indexes = get_filtered_test_indexes(matrix)
-    groups = group_by_pass_pattern(matrix, filtered_test_indexes)
-    duplicates = get_duplicate_indexes(groups)
-    all_removed_tests = set(filtered_test_indexes) | duplicates
-    
-    update_item_with_filtered_tests(item, all_removed_tests)
-    
-    filtered_output_indexes = get_filtered_outputs_indexes(item)
-    update_item_with_filtered_outputs(item, filtered_output_indexes)
-    
+    filtered_indexes = get_filtered_test_indexes(matrix)
+    all_removed = set(filtered_indexes)
+
+    update_item_with_filtered_tests(item, all_removed)
+
+    if item['filtered_tests']:
+        item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
+
     return item
 
 
@@ -136,27 +138,28 @@ def main(
     
     print(f"\n=== Before Filtering ===")
     print(f"Average number of test cases: {avg_tests_before:.2f}")
-    print(f"Average number of solutions: {avg_solutions_before:.2f}")
     
     dataset = dataset.map(
-        filter_tests_and_solutions,
+        filter_test_cases,
         num_proc=num_proc,
-        desc="Filtering tests and solutions",
+        desc="Filtering tests",
     )
     
-    num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
-    num_solutions_after = [len(x['filtered_outputs']) for x in tqdm(dataset, desc="Calculating avg outputs after filtering")]
-    avg_tests_after = np.mean(num_tests_after)
-    avg_solutions_after = np.mean(num_solutions_after)
+    num_before_removal = len(dataset)
+    dataset = dataset.filter(
+        lambda x: len(x['filtered_tests']) > 0,
+        num_proc=num_proc,
+        desc="Removing items with empty filtered_tests"
+    )
+    num_after_removal = len(dataset)
+    print(f"Removed {num_before_removal - num_after_removal} items with no valid test cases")
     
+    num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
+    avg_tests_after = np.mean(num_tests_after)
     print(f"\n=== After Filtering ===")
     print(f"Average number of test cases: {avg_tests_after:.2f}")
-    print(f"Average number of outputs: {avg_solutions_after:.2f}")
-    
     print(f"\n=== Difference ===")
     print(f"Test cases filtered: {avg_tests_before - avg_tests_after:.2f} ({(avg_tests_before - avg_tests_after) / avg_tests_before * 100:.1f}%)")
-    print(f"Outputs filtered: {avg_solutions_before - avg_solutions_after:.2f} ({(avg_solutions_before - avg_solutions_after) / avg_solutions_before * 100:.1f}%)")
-
 
     dataset.to_json(output_file, orient="records", lines=True)
     print(f"Processed dataset saved to {output_file}")

@@ -55,7 +55,7 @@ def main(
     test_cases = []
     for item in data:
         eval_tests = item['filtered_tests']
-        for output in item['filtered_outputs']:
+        for output in item['outputs']:
             solution_strs.append(output)
             test_cases.append(eval_tests)
 
@@ -93,14 +93,14 @@ def main(
     for item in data:
         item['gen_result'] = {}
         item['gen_result']['eval_results'] = []
+        item['gen_result'].pop('outputs', None)
         test_case_diversity_arr = []
-        for _ in range(len(item['filtered_outputs'])):
+        for _ in range(len(item['outputs'])):
             item['gen_result']['eval_results'].append({
                 'pass_rate': pass_rates[idx],
                 'test_cases_pass_status': test_cases_pass_status[idx],
                 'parse_code': dataset['parse_code'][idx]
             })
-            item['gen_result'].pop('outputs', None)  # Remove outputs to save space
             test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
             idx += 1
         test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
