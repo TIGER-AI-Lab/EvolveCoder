@@ -129,6 +129,6 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3_fine_grained_test_cases/step3.4_eval_combined_tests.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --round 1
+python acecoderv3_fine_grained_test_cases/step3.4_eval_combined_tests.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step3.3_parsing_tests_round_1.jsonl --round 1
 """
 

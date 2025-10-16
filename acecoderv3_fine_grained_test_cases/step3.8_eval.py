@@ -55,7 +55,6 @@ def main(
     test_cases = []
     for item in data:
         eval_tests = item['raw_tests'] + item['synthesis_result']['tests']
-        print(len(eval_tests))
         for output in item['outputs']:
             solution_strs.append(output)
             test_cases.append(eval_tests)
