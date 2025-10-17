@@ -206,6 +206,7 @@ async def process_batch_async(
         
         # Update item with response
         result_item = item.copy()
+        result_item['synthesis_result']['gpt_prompt'] = prompt
         result_item['synthesis_result']['gpt_response'] = response[0]
         return result_item
     
@@ -298,6 +299,7 @@ async def main_async(
         }
         if hash_id in cached_data:
             item['synthesis_result']['gpt_response'] = cached_data[hash_id]['gpt_response']
+            item['synthesis_result']['gpt_prompt'] = cached_data[hash_id]['gpt_prompt']
         else:
             items_to_process_map[hash_id] = i
             items_to_process.append(item)
