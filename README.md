@@ -41,3 +41,8 @@ bash scripts/run_old_acecoderv2.sh
 ```bash
 bash acecoderv3_fine_grained_test_cases/step1.sh
 ```
+
+## Docker
+docker build -t acecoderv3 .
+export OPENAI_API_KEY='your openai key'
+docker run --rm -it acecoderv3
