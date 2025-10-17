@@ -119,11 +119,19 @@ def preprocess_dataset(sub_dataset_name: str, max_sample=None, num_proc=4) -> da
     if sub_dataset_name == 'all':
         sub_dataset_names = ["TACO", "APPS", "primeintellect", "codeforces", "contests"]
         all_datasets = []
-        for name in sub_dataset_names:
-            sub_ds = datasets.load_dataset(data, name, split="train")
-            if max_sample is not None:
-                sub_ds = sub_ds.select(range(max_sample))
-            all_datasets.append(sub_ds)
+        if max_sample is not None:
+            samples_per_subset = max_sample // len(sub_dataset_names)
+            remainder = max_sample % len(sub_dataset_names)      
+            for i, name in enumerate(sub_dataset_names):
+                sub_ds = datasets.load_dataset(data, name, split="train")
+                num_samples = samples_per_subset + (1 if i < remainder else 0)
+                num_samples = min(num_samples, len(sub_ds))
+                sub_ds = sub_ds.select(range(num_samples))
+                all_datasets.append(sub_ds)
+        else:
+            for name in sub_dataset_names:
+                sub_ds = datasets.load_dataset(data, name, split="train")
+                all_datasets.append(sub_ds)
         dataset = concatenate_datasets(all_datasets)
     else:
         dataset = datasets.load_dataset(data, sub_dataset_name, split="train")
