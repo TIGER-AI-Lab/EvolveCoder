@@ -5,7 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "acecoder",
+    "acecoder @ git+https://github.com/TIGER-AI-Lab/AceCoder.git@dev",
     "datasets>=4.0.0",
     "fire>=0.7.0",
     "openai>=1.97.1",
