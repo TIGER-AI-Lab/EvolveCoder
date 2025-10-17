@@ -140,8 +140,8 @@ def preprocess_dataset(sub_dataset_name: str, max_sample=None, num_proc=4) -> da
         
     def process_item(item, idx):
         problem = item.get("question")
-        if item.get('starter_code') != '':
-            starter_code = item.get('starter_code')
+        starter_code = item.get('starter_code')
+        if starter_code:
             problem += f"\n\nHere is the starter code:\n{starter_code}"
         solution = item.get("solution")
         id = item.get("id")
