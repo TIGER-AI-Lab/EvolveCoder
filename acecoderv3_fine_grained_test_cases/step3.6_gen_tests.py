@@ -16,7 +16,7 @@ from pathlib import Path
 from datasets import concatenate_datasets
 from evalplus.sanitize import sanitize, code_extract
 
-from acecoderv2.synthesizer.utils import (
+from acecoderv3_fine_grained_test_cases.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_cache,
@@ -223,6 +223,8 @@ async def main_async(
     cache_file, output_file = prepare_environment(
         FILE_NAME, file_path, output_dir, round, overwrite
     )
+    if cache_file is None and output_file is None:
+        return
     data = preprocess_dataset(file_path, max_samples, num_proc)
     cached_data = load_cache(cache_file)
     

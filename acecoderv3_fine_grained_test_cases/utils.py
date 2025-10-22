@@ -132,7 +132,8 @@ def prepare_environment(file_name: str, file_path: str, output_dir: str, round: 
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if output_file.exists() and not overwrite:
-        raise FileExistsError(f"Output file {output_file} exists. Use --overwrite to overwrite.")
+        print(f"Output file {output_file} already exists and is not empty. Use --overwrite to overwrite.")
+        return None, None
 
     return cache_file, output_file
 

@@ -2,8 +2,8 @@ import fire
 import json
 import datasets
 import random
-from acecoderv3.code_eval import eval_codes, parse_code
-from acecoderv2.synthesizer.utils import print_statistics
+from acecoderv3_fine_grained_test_cases.code_eval import eval_codes, parse_code
+from acecoderv3_fine_grained_test_cases.utils import print_statistics
 from typing import List, Union, Optional
 from pathlib import Path
 import numpy as np

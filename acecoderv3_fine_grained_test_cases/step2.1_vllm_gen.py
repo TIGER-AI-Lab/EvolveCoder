@@ -8,7 +8,7 @@ from vllm import LLM, SamplingParams
 from tqdm import tqdm
 from typing import List
 from transformers import AutoTokenizer
-from acecoderv2.synthesizer.utils import pretty_name, append_jsonl, hash_messages
+from acecoderv3_fine_grained_test_cases.utils import pretty_name, append_jsonl, hash_messages
 
 def load_vllm_model(
     model_name_or_path: str,

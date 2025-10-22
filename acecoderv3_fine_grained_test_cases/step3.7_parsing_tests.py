@@ -6,7 +6,7 @@ from fire import Fire
 from tqdm import tqdm
 from pathlib import Path
 
-from acecoderv2.synthesizer.utils import (
+from acecoderv3_fine_grained_test_cases.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_jsonl,

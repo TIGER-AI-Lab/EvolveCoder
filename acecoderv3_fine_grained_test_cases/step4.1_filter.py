@@ -9,7 +9,7 @@ from fire import Fire
 from tqdm import tqdm
 from pathlib import Path
 
-from acecoderv2.synthesizer.utils import (
+from acecoderv3_fine_grained_test_cases.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_jsonl,
@@ -49,12 +49,22 @@ def group_by_pass_pattern(test_pass_matrix, filtered_indexes):
     return groups
 
 
+# def get_duplicate_indexes(groups):
+#     duplicate_indexes = set()
+#     for _, indices in groups.items():
+#         if len(indices) > 3:
+#             # kept = random.choice(indices)
+#             kept = random.sample(indices, 3)
+#             duplicate_indexes |= {idx for idx in indices if idx != kept}
+#     return duplicate_indexes
+
+
 def get_duplicate_indexes(groups):
     duplicate_indexes = set()
     for _, indices in groups.items():
-        if len(indices) > 1:
-            kept = random.choice(indices)
-            duplicate_indexes |= {idx for idx in indices if idx != kept}
+        if len(indices) > 3:
+            kept = random.sample(indices, 3)
+            duplicate_indexes |= {idx for idx in indices if idx not in kept}
     return duplicate_indexes
 
 
@@ -103,12 +113,13 @@ def filter_test_cases(item):
 
     matrix = build_test_pass_matrix(item)
     filtered_indexes = get_filtered_test_indexes(matrix)
-    all_removed = set(filtered_indexes)
+    groups = group_by_pass_pattern(matrix, filtered_indexes)
+    duplicates = get_duplicate_indexes(groups)
+    all_removed = set(filtered_indexes) | duplicates
 
     update_item_with_filtered_tests(item, all_removed)
 
-    if item['filtered_tests']:
-        item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
+    item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
 
     return item
 
@@ -132,9 +143,7 @@ def main(
     dataset = datasets.Dataset.from_json(file_path)
     
     num_tests_before = [len(x['tests']) for x in tqdm(dataset, desc="Calculating avg test cases before filtering")]
-    num_solutions_before = [len(x['outputs']) for x in tqdm(dataset, desc="Calculating avg outputs before filtering")]
     avg_tests_before = np.mean(num_tests_before)
-    avg_solutions_before = np.mean(num_solutions_before)
     
     print(f"\n=== Before Filtering ===")
     print(f"Average number of test cases: {avg_tests_before:.2f}")

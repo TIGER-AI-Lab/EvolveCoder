@@ -36,7 +36,7 @@ def update_item_with_filtered_tests(item, all_removed_indexes):
     ]
 
     item['raw_tests'] = item['tests']
-    item['filtered_tests'] = filtered_tests
+    item['filtered_tests'] = filtered_tests if filtered_tests else ['']
     item.pop('tests', None)
 
     if filtered_tests:
@@ -94,7 +94,12 @@ def main(
 ):
     assert os.path.exists(file_path), f"File {file_path} does not exist."
     output_dir = output_dir or Path(file_path).parent
-    output_file = output_dir / f"{FILE_NAME}_round_{round}.jsonl"
+    if round <= 1:
+        output_file = output_dir / f"round_{round}" / f"{FILE_NAME}_round_{round}.jsonl"
+    else:
+        assert Path(output_dir).name == f"round_{round-1}"
+        output_dir = Path(output_dir).parent
+        output_file = output_dir / f"round_{round}" / f"{FILE_NAME}_round_{round}.jsonl"
     if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
         print(f"Output file {output_file} already exists and is not empty. Use --overwrite to overwrite.")
         return
@@ -113,7 +118,7 @@ def main(
     
     num_before_removal = len(dataset)
     dataset = dataset.filter(
-        lambda x: len(x['filtered_tests']) > 0,
+        lambda x: not (len(x['filtered_tests']) == 1 and x['filtered_tests'][0] == ''),
         num_proc=num_proc,
         desc="Removing items with empty filtered_tests"
     )
