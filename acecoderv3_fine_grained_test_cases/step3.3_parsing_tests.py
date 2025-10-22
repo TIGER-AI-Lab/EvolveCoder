@@ -18,7 +18,7 @@ from acecoderv3_fine_grained_test_cases.utils import (
 
 FILE_NAME = Path(__file__).stem
 ERROR_QUESTION = "Error in question generation"
-ERROR_TESTS = []
+ERROR_TESTS = ["assert False"]
 
 def filter_parsed_items(item):
     """
@@ -59,8 +59,6 @@ def main(
         try:
             obj = parse_incomplete_json(gpt_response)
             tests = obj.get("tests", ERROR_TESTS)
-            if tests is None:
-                tests = []
         except Exception as e:
             print(f"Error parsing response: {e}")
             tests = ERROR_TESTS
