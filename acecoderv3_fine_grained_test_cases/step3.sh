@@ -5,7 +5,7 @@ set -o pipefail
 # -------------------------
 # 配置参数
 # -------------------------
-NUM_ROUNDS=${1:-4}             # 默认循环4轮，可通过命令行指定，如 ./run_test_generation.sh 3
+NUM_ROUNDS=${1:-8}             # 默认循环4轮，可通过命令行指定，如 ./run_test_generation.sh 3
 NUM_PROC=64                    # 并行进程数
 MODEL_NAME="gpt-4.1-mini"      # 使用的模型
 SAVE_BATCH_SIZE=8
