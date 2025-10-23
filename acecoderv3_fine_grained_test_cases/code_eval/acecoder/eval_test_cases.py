@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from warnings import warn
 
 import numpy as np
+import psutil
 from termcolor import cprint
 from tqdm import tqdm
 
@@ -187,7 +188,8 @@ def evaluate(
         dataset_hash = None
 
         _identifier_list = [x['_identifier'] for x in all_samples]
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+        executor = ProcessPoolExecutor(max_workers=n_workers)
+        try:
             futures = []
             completion_id = Counter()
             n_samples = 0
@@ -251,6 +253,24 @@ def evaluate(
                 eval_results[result["task_id"]].append(result)
             
             all_samples_results = [all_samples_results_identifier_map[x] for x in _identifier_list]
+        finally:
+            print(f"Ping: Starting subprocess cleanup")
+            terminated_count = 0
+            killed_count = 0
+            for pid, proc in executor._processes.items():
+                try:
+                    p = psutil.Process(pid)
+                    p.terminate()
+                    try:
+                        p.wait(timeout=5)
+                        terminated_count += 1
+                    except psutil.TimeoutExpired:
+                        p.kill()
+                        killed_count += 1
+                except Exception:
+                    pass
+            print(f"Ping: Cleanup complete: {terminated_count} terminated, {killed_count} force-killed.")
+            executor.shutdown(wait=False)
         # save the results
         if result_path:
             if result_path.endswith(".jsonl"):
