@@ -220,15 +220,34 @@ def evaluate(
 
             assert n_samples == len(remainings), "Missing problems in unfinished"
 
-            def stucking_checker():
+            # def stucking_checker():
+            #     while remainings:
+            #         last_size = len(remainings)
+            #         time.sleep(20)
+            #         if last_size != len(remainings) or len(remainings) == 0:
+            #             continue
+            #         # Potential stucking
+            #         warn("No samples had finished testing in the last 20s")
+            #         warn(f"{len(remainings)} samples to be tested...")
+                    
+            def stucking_checker(max_no_progress_time=60):
+                no_progress_time = 0
                 while remainings:
                     last_size = len(remainings)
                     time.sleep(20)
-                    if last_size != len(remainings) or len(remainings) == 0:
+                    if len(remainings) == 0:
+                        break
+                    if last_size != len(remainings):
+                        no_progress_time = 0  # reset timer if there is progress
                         continue
-                    # Potential stucking
-                    warn("No samples had finished testing in the last 20s")
-                    warn(f"{len(remainings)} samples to be tested...")
+                    else:
+                        no_progress_time += 20
+                        warn(f"No progress for {no_progress_time}s, {len(remainings)} samples remaining...")
+
+                    # if too long without progress
+                    if no_progress_time >= max_no_progress_time:
+                        warn("No progress detected for too long, terminating execution...")
+                        os._exit(1)  # or raise SystemExit("Stuck detected")
 
             threading.Thread(target=stucking_checker).start()
 

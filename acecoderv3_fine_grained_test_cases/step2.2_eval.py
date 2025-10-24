@@ -8,21 +8,79 @@ from typing import List, Union, Optional
 from pathlib import Path
 import numpy as np
 from collections import Counter
+import signal
+import sys
+import os
+import subprocess
+from contextlib import contextmanager
 
 FILE_NAME = Path(__file__).stem
 LAST_STEP_NAME = "step2.1_gen"
+
+class TimeoutException(Exception):
+    pass
+
+def restart_program():
+    """Restart the current program with the same arguments"""
+    print(f"\n🔄 Restarting program...")
+    print(f"   Command: {' '.join(sys.argv)}")
+    python = sys.executable
+    os.execl(python, python, *sys.argv)
+
+@contextmanager
+def timeout(seconds):
+    """Context manager for timeout using signal alarm"""
+    def timeout_handler(signum, frame):
+        raise TimeoutException(f"Batch processing exceeded timeout of {seconds} seconds")
+    
+    # Set the signal handler and alarm
+    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    
+    try:
+        yield
+    finally:
+        # Restore the old handler and cancel alarm
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, old_handler)
+
+def load_cache(cache_file: Path):
+    """Load processed items from cache file"""
+    if not cache_file.exists():
+        return {}
+    
+    cache = {}
+    print(f"📂 Loading cache from: {cache_file}")
+    with open(cache_file, 'r') as f:
+        for line in f:
+            item = json.loads(line)
+            item_id = item.get('id') or item.get('synthesis_result', {}).get('id')
+            if item_id:
+                cache[item_id] = item
+    
+    print(f"✅ Loaded {len(cache)} cached items")
+    return cache
+
+def save_to_cache(item, cache_file: Path):
+    """Append a single item to cache file"""
+    with open(cache_file, 'a') as f:
+        f.write(json.dumps(item, ensure_ascii=False) + '\n')
 
 def main(
     file_path: str,
     output_dir: str = None,
     overwrite: bool = False,
     num_proc: int = 64,
-    max_samples: Optional[int] = 0
+    max_samples: Optional[int] = 0,
+    batch_size: int = 100,
+    batch_timeout: int = 1500,  # Default 1 hour timeout per batch
+    auto_restart: bool = True  # Auto restart on timeout
 ):
     output_dir = Path(output_dir) if output_dir else Path(file_path).parent
     output_dir.mkdir(parents=True, exist_ok=True)
     new_file_name = Path(file_path).stem.replace(LAST_STEP_NAME, FILE_NAME)
     output_file = output_dir / f"{FILE_NAME}.jsonl"
+    cache_file = output_dir / f"{FILE_NAME}.cache.jsonl"
     stats_output_file = output_dir / f"{FILE_NAME}_stats.txt"
     
     if output_file.exists() and output_file.stat().st_size != 0 and not overwrite:
@@ -44,6 +102,14 @@ def main(
     else:
         raise ValueError("Unsupported file format. Please provide a .jsonl or .json file.")
     
+    # Ensure all items have IDs
+    for i, item in enumerate(data):
+        if 'id' not in item:
+            if 'synthesis_result' in item and 'id' in item['synthesis_result']:
+                item['id'] = item['synthesis_result']['id']
+            else:
+                item['id'] = f"item_{i}"
+    
     if max_samples > 0 and len(data) > max_samples:
         random.seed(42)  # For reproducibility
         random_idxs = set(random.sample(range(len(data)), max_samples))
@@ -51,77 +117,172 @@ def main(
 
     print(f"📥 Loaded {len(data)} problems")
 
-    # Extract solutions and test cases
-    solution_strs = []
-    test_cases = []
-    for item in data:
-        for llm_output in item['gen_result']['outputs']:
-            solution_strs.append(llm_output)
-            test_cases.append(item['synthesis_result']['tests'])
-
-    print(f"🔧 Processing {len(solution_strs)} solutions...")
-
-    dataset = datasets.Dataset.from_dict({
-        'solution_str': solution_strs,
-        'test_case': test_cases
-    })
+    # Load cache and filter out processed items
+    if overwrite and cache_file.exists():
+        cache_file.unlink()
+        print(f"🗑️  Removed existing cache file")
     
-    def parse_code_func(item):
-        thinking_end_idx = item['solution_str'].find("</think>")
-        if thinking_end_idx != -1:
-            item['parse_code'] = item['solution_str'][thinking_end_idx + len("</think>"):]
+    cache = load_cache(cache_file)
+    
+    # Separate processed and unprocessed items
+    processed_data = []
+    unprocessed_data = []
+    
+    for item in data:
+        item_id = item['id']
+        if item_id in cache:
+            processed_data.append(cache[item_id])
         else:
-            item['parse_code'] = item['solution_str']
-        return item
+            unprocessed_data.append(item)
     
-    dataset = dataset.map(parse_code_func, num_proc=num_proc, desc="Parsing code")
+    print(f"✅ Already processed: {len(processed_data)} items")
+    print(f"⏳ To process: {len(unprocessed_data)} items")
 
-    print("⚡ Evaluating codes...")
-    pass_rates, test_cases_info = eval_codes(
-        solution_strs=dataset['parse_code'],
-        test_cases=dataset['test_case'],
-        return_test_cases_pass_status=True,
-        binary=False,
-        num_processes=num_proc,
-    )
-    
-    test_cases_pass_status = [info['details'] for info in test_cases_info]
-    extracted_codes = [info['extracted_code'] for info in test_cases_info]
+    if len(unprocessed_data) == 0:
+        print("🎉 All items already processed!")
+        all_data = processed_data
+    else:
+        # Process in batches
+        newly_processed = []
+        for batch_start in range(0, len(unprocessed_data), batch_size):
+            batch_end = min(batch_start + batch_size, len(unprocessed_data))
+            batch_data = unprocessed_data[batch_start:batch_end]
+            
+            print(f"\n🔧 Processing batch {batch_start//batch_size + 1}/{(len(unprocessed_data)-1)//batch_size + 1} "
+                  f"(items {batch_start+1}-{batch_end}/{len(unprocessed_data)})...")
+            print(f"⏱️  Batch timeout: {batch_timeout} seconds")
+            
+            try:
+                with timeout(batch_timeout):
+                    # Extract solutions and test cases for this batch
+                    solution_strs = []
+                    test_cases = []
+                    item_indices = []
+                    
+                    for item_idx, item in enumerate(batch_data):
+                        for llm_output in item['gen_result']['outputs']:
+                            solution_strs.append(llm_output)
+                            test_cases.append(item['synthesis_result']['tests'])
+                            item_indices.append(item_idx)
 
-    # Reassign results back to original data structure
-    idx = 0
-    for item in data:
-        item['gen_result']['eval_results'] = []
-        test_case_diversity_arr = []
-        for _ in range(len(item['gen_result']['outputs'])):
-            item['gen_result']['eval_results'].append({
-                'pass_rate': pass_rates[idx],
-                'test_cases_pass_status': test_cases_pass_status[idx],
-                'parse_code': extracted_codes[idx]
-            })
-            test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
-            idx += 1
-        test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
-        item['gen_result']['test_case_diversity'] = {
-            "arr": test_case_diversity_arr,
-            "mean": np.mean(test_case_diversity_arr, axis=1).tolist(),
-        }
-        item['outputs'] = item['gen_result']['outputs']
-        item['problem'] = item['synthesis_result']['problem']
-        item['tests'] = item['synthesis_result']['tests']
-        item.pop('program', None)
-        item['gen_result'].pop('outputs', None)  # Remove outputs to save space
+                    print(f"   Processing {len(solution_strs)} solutions...")
 
-    
+                    dataset = datasets.Dataset.from_dict({
+                        'solution_str': solution_strs,
+                        'test_case': test_cases
+                    })
+                    
+                    def parse_code_func(item):
+                        thinking_end_idx = item['solution_str'].find("</think>")
+                        if thinking_end_idx != -1:
+                            item['parse_code'] = item['solution_str'][thinking_end_idx + len("</think>"):]
+                        else:
+                            item['parse_code'] = item['solution_str']
+                        return item
+                    
+                    dataset = dataset.map(parse_code_func, num_proc=num_proc, desc="Parsing code")
 
-    # Save output data
-    print(f"💾 Saving results to: {output_file}")
+                    print("   ⚡ Evaluating codes...")
+                    pass_rates, test_cases_info = eval_codes(
+                        solution_strs=dataset['parse_code'],
+                        test_cases=dataset['test_case'],
+                        return_test_cases_pass_status=True,
+                        binary=False,
+                        num_processes=num_proc,
+                    )
+                    
+                    test_cases_pass_status = [info['details'] for info in test_cases_info]
+                    extracted_codes = [info['extracted_code'] for info in test_cases_info]
+
+                    # Reassign results back to batch items
+                    idx = 0
+                    for item in batch_data:
+                        item['gen_result']['eval_results'] = []
+                        test_case_diversity_arr = []
+                        for _ in range(len(item['gen_result']['outputs'])):
+                            item['gen_result']['eval_results'].append({
+                                'pass_rate': pass_rates[idx],
+                                'test_cases_pass_status': test_cases_pass_status[idx],
+                                'parse_code': extracted_codes[idx]
+                            })
+                            test_case_diversity_arr.append([x['pass'] for x in test_cases_pass_status[idx]])
+                            idx += 1
+                        test_case_diversity_arr = np.array(test_case_diversity_arr).T.tolist()
+                        item['gen_result']['test_case_diversity'] = {
+                            "arr": test_case_diversity_arr,
+                            "mean": np.mean(test_case_diversity_arr, axis=1).tolist(),
+                        }
+                        item['outputs'] = item['gen_result']['outputs']
+                        item['problem'] = item['synthesis_result']['problem']
+                        item['tests'] = item['synthesis_result']['tests']
+                        item.pop('program', None)
+                        item['gen_result'].pop('outputs', None)  # Remove outputs to save space
+                        
+                        # Save to cache immediately
+                        save_to_cache(item, cache_file)
+                        newly_processed.append(item)
+                    
+                    print(f"   ✅ Batch {batch_start//batch_size + 1} completed and cached")
+                    
+            except TimeoutException as e:
+                print(f"\n⚠️  {e}")
+                print(f"💾 Progress saved to cache: {len(newly_processed)} items processed in this session")
+                print(f"   Remaining items: {len(unprocessed_data) - batch_end}")
+                
+                if auto_restart:
+                    print(f"🔄 Auto-restarting in 3 seconds...")
+                    import time
+                    time.sleep(3)
+                    restart_program()
+                else:
+                    print(f"🔄 Please restart the program to continue processing")
+                    sys.exit(1)
+            except (KeyboardInterrupt, SystemExit):
+                # Handle user interruption or system exit
+                print(f"\n\n⚠️  Process interrupted")
+                print(f"💾 Progress saved to cache: {len(newly_processed)} items processed in this session")
+                print(f"🔄 You can restart the program to continue processing")
+                raise
+            except Exception as e:
+                # Check if this is a timeout-related error from multiprocessing
+                error_msg = str(e).lower()
+                error_type = type(e).__name__
+                
+                is_timeout = (
+                    'timeout' in error_msg or 
+                    error_type in ('TimeoutError', 'TimeoutException') or
+                    'exceeded timeout' in error_msg
+                )
+                
+                if is_timeout:
+                    print(f"\n⚠️  Batch processing timeout detected: {e}")
+                    print(f"💾 Progress saved to cache: {len(newly_processed)} items processed in this session")
+                    print(f"   Remaining items: {len(unprocessed_data) - batch_end}")
+                    
+                    if auto_restart:
+                        print(f"🔄 Auto-restarting in 3 seconds...")
+                        import time
+                        time.sleep(3)
+                        restart_program()
+                    else:
+                        print(f"🔄 Please restart the program to continue processing")
+                        sys.exit(1)
+                else:
+                    print(f"\n❌ Error processing batch: {e}")
+                    print(f"💾 Progress saved to cache: {len(newly_processed)} items processed so far")
+                    print(f"🔄 You can restart the program to continue processing")
+                    raise
+        
+        all_data = processed_data + newly_processed
+
+    # Save final output
+    print(f"\n💾 Saving final results to: {output_file}")
     with open(output_file, 'w') as f:
-        for item in data:
+        for item in all_data:
             f.write(json.dumps(item, ensure_ascii=False) + '\n')
     
     # Print comprehensive statistics
-    print_statistics(data, output_file=stats_output_file)
+    print_statistics(all_data, output_file=stats_output_file)
     print(f"✅ Results saved to {output_file}")
     
     
@@ -131,5 +292,16 @@ if __name__ == "__main__":
 
 """
 python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl
-"""
 
+# With custom batch size and timeout (auto-restart enabled by default)
+python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --batch_size=50 --batch_timeout=1800
+
+# Disable auto-restart (manual restart required)
+python acecoderv3_fine_grained_test_cases/step2.2_eval.py input.jsonl --auto_restart=False
+
+# Force overwrite (clear cache)
+python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --overwrite=True
+
+# Example with 30 minute timeout per batch and auto-restart
+python acecoderv3_fine_grained_test_cases/step2.2_eval.py input.jsonl --batch_timeout=1800 --auto_restart=True
+"""
