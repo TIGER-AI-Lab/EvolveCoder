@@ -44,37 +44,37 @@ for ROUND in $(seq 1 $NUM_ROUNDS); do
         "${BASE_DIR}/round_${ROUND}/step3.2_gen_tests_results_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    echo "👉 Step 3.4: Evaluate combined tests"
-    python acecoderv3_fine_grained_test_cases/step3.4_eval_combined_tests.py \
-        "${BASE_DIR}/round_${ROUND}/step3.3_parsing_tests_round_${ROUND}.jsonl" \
-        --round "${ROUND}" --num_proc "${NUM_PROC}"
+    # echo "👉 Step 3.4: Evaluate combined tests"
+    # python acecoderv3_fine_grained_test_cases/step3.4_eval_combined_tests.py \
+    #     "${BASE_DIR}/round_${ROUND}/step3.3_parsing_tests_round_${ROUND}.jsonl" \
+    #     --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    echo "👉 Step 3.5: Filter evaluated tests"
-    python acecoderv3_fine_grained_test_cases/step3.5_filter_tests.py \
-        "${BASE_DIR}/round_${ROUND}/step3.4_eval_combined_tests_round_${ROUND}.jsonl" \
+    echo "👉 Step 3.4: Filter evaluated tests"
+    python acecoderv3_fine_grained_test_cases/step3.4_filter_tests.py \
+        "${BASE_DIR}/round_${ROUND}/step3.3_parsing_tests_round_${ROUND}.jsonl" \
         --num_proc "${NUM_PROC}" --round "${ROUND}"
 
-    echo "👉 Step 3.6: Generate refined tests"
-    python acecoderv3_fine_grained_test_cases/step3.6_gen_tests.py \
-        "${BASE_DIR}/round_${ROUND}/step3.5_filter_tests_round_${ROUND}.jsonl" \
+    echo "👉 Step 3.5: Generate refined tests"
+    python acecoderv3_fine_grained_test_cases/step3.5_gen_tests.py \
+        "${BASE_DIR}/round_${ROUND}/step3.4_filter_tests_round_${ROUND}.jsonl" \
         --round "${ROUND}" \
         --model_name "${MODEL_NAME}" \
         --save_batch_size "${SAVE_BATCH_SIZE}" \
         --max_concurrent 1 \
         --batch_delay "${BATCH_DELAY}"
 
-    echo "👉 Step 3.7: Parse refined tests"
-    python acecoderv3_fine_grained_test_cases/step3.7_parsing_tests.py \
-        "${BASE_DIR}/round_${ROUND}/step3.6_gen_tests_results_round_${ROUND}.jsonl" \
+    echo "👉 Step 3.6: Parse refined tests"
+    python acecoderv3_fine_grained_test_cases/step3.6_parsing_tests.py \
+        "${BASE_DIR}/round_${ROUND}/step3.5_gen_tests_results_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    echo "👉 Step 3.8: Evaluate final tests"
-    python acecoderv3_fine_grained_test_cases/step3.8_eval.py \
-        "${BASE_DIR}/round_${ROUND}/step3.7_parsing_tests_round_${ROUND}.jsonl" \
+    echo "👉 Step 3.7: Evaluate final tests"
+    python acecoderv3_fine_grained_test_cases/step3.7_eval.py \
+        "${BASE_DIR}/round_${ROUND}/step3.6_parsing_tests_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
     # 为下一轮准备输入文件
-    INPUT_FILE="${BASE_DIR}/round_${ROUND}/step3.8_eval_round_${ROUND}.jsonl"
+    INPUT_FILE="${BASE_DIR}/round_${ROUND}/step3.7_eval_round_${ROUND}.jsonl"
 
     echo "✅ 第 ${ROUND} 轮完成！结果保存在：${INPUT_FILE}"
     echo

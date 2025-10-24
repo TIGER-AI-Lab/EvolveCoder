@@ -36,24 +36,31 @@ def update_item_with_filtered_tests(item, all_removed_indexes):
     ]
 
     item['raw_tests'] = item['tests']
-    item['filtered_tests'] = filtered_tests if filtered_tests else ['']
+    item['filtered_tests_first'] = filtered_tests if filtered_tests else ['']
     item.pop('tests', None)
 
-    if filtered_tests:
+    if item['filtered_tests_first'] != ['']:
+        eval_results_first = []
         for eval_result in item['gen_result']['eval_results']:
             filtered_statuses = [
                 status for i, status in enumerate(eval_result['test_cases_pass_status'])
                 if i not in all_removed_indexes
             ]
-            eval_result['test_cases_pass_status'] = filtered_statuses
             passes = [s['pass'] for s in filtered_statuses]
-            eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
+            
+            new_eval_result = eval_result.copy()
+            new_eval_result['test_cases_pass_status'] = filtered_statuses
+            new_eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
+            
+            eval_results_first.append(new_eval_result)
+        
+        item['gen_result']['eval_results_first'] = eval_results_first
 
 
 def compute_test_case_diversity(item):
     arr = [
         [x['pass'] for x in eval_result['test_cases_pass_status']]
-        for eval_result in item['gen_result']['eval_results']
+        for eval_result in item['gen_result']['eval_results_first']
     ]
 
     if not arr:
@@ -78,8 +85,8 @@ def filter_test_cases(item):
 
     update_item_with_filtered_tests(item, all_removed)
 
-    if item['filtered_tests']:
-        item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
+    if item['filtered_tests_first'] != ['']:
+        item['gen_result']['test_case_diversity_first'] = compute_test_case_diversity(item)
 
     return item
 
@@ -118,7 +125,7 @@ def main(
     
     num_before_removal = len(dataset)
     dataset = dataset.filter(
-        lambda x: not (len(x['filtered_tests']) == 1 and x['filtered_tests'][0] == ''),
+        lambda x: not (len(x['filtered_tests_first']) == 1 and x['filtered_tests_first'][0] == ''),
         num_proc=num_proc,
         desc="Removing items with empty filtered_tests"
     )
@@ -126,7 +133,7 @@ def main(
     print(f"Removed {num_before_removal - num_after_removal} items with no valid test cases")
 
     
-    num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
+    num_tests_after = [len(x['filtered_tests_first']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
     avg_after = np.mean(num_tests_after)
     print(f"Average number of test cases after filtering: {avg_after:.2f}")
 
