@@ -24,8 +24,8 @@ def filter_parsed_items(item):
     """
     Filter function to check if the item has 'gpt_response' and 'tests'.
     """
-    gpt_response = item['synthesis_result'].get('gpt_response', None)
-    tests = item['synthesis_result'].get('tests', None)
+    gpt_response = item['synthesis_result_second'].get('gpt_response', None)
+    tests = item['synthesis_result_second'].get('tests', None)
     if gpt_response and gpt_response != ERROR_QUESTION and tests and tests != ERROR_TESTS:
         return True
     return False
@@ -53,7 +53,7 @@ def main(
     dataset = datasets.Dataset.from_json(file_path)
 
     def parsing_item(item):
-        gpt_response = item['synthesis_result'].get('gpt_response', None)
+        gpt_response = item['synthesis_result_second'].get('gpt_response', None)
         
         # parse the response
         try:
@@ -65,7 +65,8 @@ def main(
             print(f"Error parsing response: {e}")
             tests = ERROR_TESTS
         
-        item['synthesis_result']['tests'] = tests
+        item['synthesis_result_second']['tests'] = tests
+        item.pop('filtered_tests_second', None)
         item.pop('sampled_solutions', None)
         item.pop('eval_matrix', None)
         return item

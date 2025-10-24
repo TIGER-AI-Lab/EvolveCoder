@@ -22,7 +22,7 @@ from acecoderv3_fine_grained_test_cases.utils import (
 FILE_NAME = Path(__file__).stem
 
 def build_test_pass_matrix(item):
-    num_tests = len(item['tests'])
+    num_tests = len(item['raw_tests'])
     matrix = []
     for test_idx in range(num_tests):
         pass_statuses = [
@@ -60,33 +60,44 @@ def get_duplicate_indexes(groups):
 
 def update_item_with_filtered_tests(item, all_removed_indexes):
     filtered_tests = [
-        test for i, test in enumerate(item['tests'])
+        test for i, test in enumerate(item['raw_tests'])
         if i not in all_removed_indexes
     ]
 
-    if not filtered_tests:
-        filtered_tests = ['assert False']
-        for eval_result in item['gen_result']['eval_results']:
-            eval_result['test_cases_pass_status'].append({'pass': False})
+    # add_false_test = False
+    # if not filtered_tests:
+    #     filtered_tests = ['assert False']
+    #     add_false_test = True
 
-    item['raw_tests'] = item['tests']
-    item['filtered_tests'] = filtered_tests
-    item.pop('tests', None)
+    item['filtered_tests_second'] = filtered_tests
 
+    eval_results_second = []
     for eval_result in item['gen_result']['eval_results']:
+        # 创建新的eval_result副本
+        new_eval_result = eval_result.copy()
+        
         filtered_statuses = [
             status for i, status in enumerate(eval_result['test_cases_pass_status'])
             if i not in all_removed_indexes
         ]
-        eval_result['test_cases_pass_status'] = filtered_statuses
+        
+        # 如果需要添加False测试，在filtered_statuses中添加
+        # if add_false_test:
+        #     filtered_statuses.append({'pass': False})
+        
+        new_eval_result['test_cases_pass_status'] = filtered_statuses
         passes = [s['pass'] for s in filtered_statuses]
-        eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
+        new_eval_result['pass_rate'] = sum(passes) / len(passes) if passes else 0.0
+        
+        eval_results_second.append(new_eval_result)
+    
+    item['gen_result']['eval_results_second'] = eval_results_second
 
 
 def compute_test_case_diversity(item):
     arr = [
         [x['pass'] for x in eval_result['test_cases_pass_status']]
-        for eval_result in item['gen_result']['eval_results']
+        for eval_result in item['gen_result']['eval_results_second']
     ]
 
     if not arr:
@@ -102,7 +113,7 @@ def compute_test_case_diversity(item):
     return {"arr": arr, "mean": mean_arr}
 
 def filter_test_cases(item):
-    assert len(item['tests']) == len(item['gen_result']['test_case_diversity']['mean'])
+    assert len(item['raw_tests']) == len(item['gen_result']['test_case_diversity']['mean'])
 
     matrix = build_test_pass_matrix(item)
     filtered_indexes = get_filtered_test_indexes(matrix)
@@ -112,7 +123,7 @@ def filter_test_cases(item):
 
     update_item_with_filtered_tests(item, all_removed)
 
-    item['gen_result']['test_case_diversity'] = compute_test_case_diversity(item)
+    item['gen_result']['test_case_diversity_second'] = compute_test_case_diversity(item)
 
     return item
 
@@ -134,7 +145,7 @@ def main(
 
     dataset = datasets.Dataset.from_json(file_path)
     
-    num_tests_before = [len(x['tests']) for x in tqdm(dataset, desc="Calculating avg test cases before filtering")]
+    num_tests_before = [len(x['raw_tests']) for x in tqdm(dataset, desc="Calculating avg test cases before filtering")]
     avg_before = np.mean(num_tests_before)
     print(f"Average number of test cases before filtering: {avg_before:.2f}")
     
@@ -144,7 +155,7 @@ def main(
         desc="Filtering test cases",
     )
     
-    num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
+    num_tests_after = [len(x['filtered_tests_second']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
     avg_after = np.mean(num_tests_after)
     print(f"Average number of test cases after filtering: {avg_after:.2f}")
 

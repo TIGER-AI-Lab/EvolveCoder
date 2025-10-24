@@ -52,7 +52,7 @@ def load_cache(cache_file: Path):
     with open(cache_file, 'r') as f:
         for line in f:
             item = json.loads(line)
-            item_id = item.get('id') or item.get('synthesis_result', {}).get('id')
+            item_id = item.get('id')
             if item_id:
                 cache[item_id] = item
     
@@ -104,10 +104,7 @@ def main(
     # Ensure all items have IDs
     for i, item in enumerate(data):
         if 'id' not in item:
-            if 'synthesis_result' in item and 'id' in item['synthesis_result']:
-                item['id'] = item['synthesis_result']['id']
-            else:
-                item['id'] = f"item_{i}"
+            item['id'] = f"item_{i}"
     
     if max_samples > 0 and len(data) > max_samples:
         random.seed(42)  # For reproducibility
@@ -159,7 +156,7 @@ def main(
                     item_indices = []
                     
                     for item_idx, item in enumerate(batch_data):
-                        eval_tests = item['raw_tests'] + item['synthesis_result']['tests']
+                        eval_tests = item['raw_tests'] + item['synthesis_result_first']['tests'] + item['synthesis_result_second']['tests']
                         for output in item['outputs']:
                             solution_strs.append(output)
                             test_cases.append(eval_tests)
@@ -196,9 +193,8 @@ def main(
                     # Reassign results back to batch items
                     idx = 0
                     for item in batch_data:
-                        item['tests'] = item['raw_tests'] + item['synthesis_result']['tests']
+                        item['tests'] = item['raw_tests'] + item['synthesis_result_first']['tests'] + item['synthesis_result_second']['tests']
                         item.pop('raw_tests', None)
-                        item.pop('filtered_tests', None)
                         item['gen_result'] = {}
                         item['gen_result']['eval_results'] = []
                         test_case_diversity_arr = []

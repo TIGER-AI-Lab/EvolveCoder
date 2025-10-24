@@ -160,11 +160,9 @@ def preprocess_dataset(file_path, max_sample=None, num_proc=4):
         dataset = dataset.select(range(max_sample))
     
     def process_dataset_item(item, idx):
-        tests = item['filtered_tests']
-
         eval_lists = [
             [case['pass'] for case in result['test_cases_pass_status']]
-            for result in item['gen_result']['eval_results']
+            for result in item['gen_result']['eval_results_second']
         ]
 
         eval_index = select_programs(eval_lists)
@@ -174,14 +172,15 @@ def preprocess_dataset(file_path, max_sample=None, num_proc=4):
         eval_matrix_str = "[\n" + "\n".join(
                 "    " + str(row) + "," for row in eval_matrix
             ) + "\n]"
-        solutions = [item['gen_result']['eval_results'][i]['parse_code'] for i in eval_index]
+        solutions = [item['gen_result']['eval_results_second'][i]['parse_code'] for i in eval_index]
 
         return {
             "id": item["id"],
             "problem": item["problem"],
             "raw_tests": item["raw_tests"],
             "outputs": item["outputs"],
-            "filtered_tests": tests,
+            "synthesis_result_first": item['synthesis_result_first'],
+            "filtered_tests_second": item['filtered_tests_second'],
             "sampled_solutions": solutions,
             "eval_matrix": eval_matrix_str,
         }
@@ -235,7 +234,7 @@ async def main_async(
 
         for i, item in enumerate(data):
             filtered_tests_str = "[\n" + "\n".join(
-                    "    " + str(row) + "," for row in item['filtered_tests']
+                    "    " + str(row) + "," for row in item['filtered_tests_second']
                 ) + "\n]"
             prompt = PROMPT_TEMPLATE_RAW.format(
                 question=item['problem'],
@@ -249,11 +248,11 @@ async def main_async(
             )
             messages = [{"role": "user", "content": prompt}]
             hash_id = hash_messages(messages)
-            item['synthesis_result'] = {"hash_id": hash_id}
+            item['synthesis_result_second'] = {"hash_id": hash_id}
 
             if hash_id in cached_data:
-                item['synthesis_result']['gpt_response'] = cached_data[hash_id]['gpt_response']
-                item['synthesis_result']['gpt_prompt'] = cached_data[hash_id]['gpt_prompt']
+                item['synthesis_result_second']['gpt_response'] = cached_data[hash_id]['gpt_response']
+                item['synthesis_result_second']['gpt_prompt'] = cached_data[hash_id]['gpt_prompt']
             else:
                 items_to_process_map[hash_id] = i
                 items_to_process.append(item)
@@ -269,7 +268,7 @@ async def main_async(
         
         async def process_single_item(item):
             filtered_tests_str = "[\n" + "\n".join(
-                    "    " + str(row) + "," for row in item['filtered_tests']
+                    "    " + str(row) + "," for row in item['filtered_tests_second']
                 ) + "\n]"
             prompt = PROMPT_TEMPLATE_RAW.format(
                 question=item['problem'],
@@ -292,8 +291,8 @@ async def main_async(
                 semaphore=semaphore, 
                 **kwargs
             )
-            item['synthesis_result']['gpt_prompt'] = prompt
-            item['synthesis_result']['gpt_response'] = response[0]
+            item['synthesis_result_second']['gpt_prompt'] = prompt
+            item['synthesis_result_second']['gpt_response'] = response[0]
             return item
 
         for i in tqdm(range(0, len(items_to_process), save_batch_size), desc="Processing batches"):
@@ -301,9 +300,9 @@ async def main_async(
             tasks = [process_single_item(item) for item in batch]
             batch_results = await tqdm.gather(*tasks, desc="Processing batch", total=len(tasks))
             
-            append_jsonl(cache_file, [i['synthesis_result'] for i in batch_results])
+            append_jsonl(cache_file, [i['synthesis_result_second'] for i in batch_results])
             for result in batch_results:
-                idx = items_to_process_map[result['synthesis_result']['hash_id']]
+                idx = items_to_process_map[result['synthesis_result_second']['hash_id']]
                 final_results[idx] = result
 
             if batch_delay > 0:
