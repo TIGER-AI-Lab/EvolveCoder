@@ -11,7 +11,7 @@ MODEL_NAME="gpt-4.1-mini"      # 使用的模型
 SAVE_BATCH_SIZE=8
 MAX_CONCURRENT=16
 BATCH_DELAY=0.01
-BASE_DIR="acecoderv3_fine_grained_test_cases/outputs/first_1000"
+BASE_DIR="acecoderv3_fine_grained_test_cases/outputs/first_1000_64"
 
 # -------------------------
 # 第1轮初始输入文件（来自 step2.2）
