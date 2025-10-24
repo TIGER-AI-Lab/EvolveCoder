@@ -16,7 +16,7 @@ BASE_DIR="acecoderv3_fine_grained_test_cases/outputs/first_1000"
 # -------------------------
 # 第1轮初始输入文件（来自 step2.2）
 # -------------------------
-INPUT_FILE="${BASE_DIR}/step2.2_eval.jsonl"
+INPUT_FILE="${BASE_DIR}/step2.2_eval2.jsonl"
 
 # -------------------------
 # 主循环
