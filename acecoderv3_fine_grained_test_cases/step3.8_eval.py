@@ -72,7 +72,7 @@ def main(
     round: int = 1,
     max_samples: Optional[int] = 0,
     batch_size: int = 100,
-    batch_timeout: int = 1500,  # Default 25 minutes timeout per batch
+    batch_timeout: int = 1500, 
     auto_restart: bool = True  # Auto restart on timeout
 ):
     output_dir = Path(output_dir) if output_dir else Path(file_path).parent
