@@ -115,7 +115,7 @@ def preprocess_dataset(sub_dataset_name: str, max_sample=None, num_proc=4) -> da
             - "response": the raw response as the solution, combined by natural language and code
             - "program": the code snippet that answers the question
     """
-    data = "CodeDPO/filtered_original_acecoderv3"
+    data = "CodeDPO/filtered_original_acecoderv3_unused"
     if sub_dataset_name == 'all':
         sub_dataset_names = ["TACO", "APPS", "primeintellect", "codeforces", "contests"]
         all_datasets = []
