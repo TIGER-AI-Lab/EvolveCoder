@@ -8,6 +8,6 @@ COPY . /workspace
 
 RUN pip install --upgrade pip && pip install -e .
 
-RUN chmod +x acecoderv3_fine_grained_test_cases/step3.sh
+RUN chmod +x acecoderv3_fine_grained_test_cases/step1.sh
 
 CMD ["bash"]
