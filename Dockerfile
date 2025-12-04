@@ -10,4 +10,4 @@ RUN pip install --upgrade pip && pip install -e .
 
 RUN chmod +x acecoderv3_fine_grained_test_cases/step3.sh
 
-CMD ["bash", "acecoderv3_fine_grained_test_cases/step3.sh"]
+CMD ["bash"]
