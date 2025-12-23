@@ -8,15 +8,15 @@ set -o pipefail
 NUM_ROUNDS=${1:-4}             # 默认循环4轮，可通过命令行指定，如 ./run_test_generation.sh 3
 NUM_PROC=64                    # 并行进程数
 MODEL_NAME="gpt-4.1-mini"      # 使用的模型
-SAVE_BATCH_SIZE=8
-MAX_CONCURRENT=16
+SAVE_BATCH_SIZE=32
+MAX_CONCURRENT=64
 BATCH_DELAY=0.01
-BASE_DIR="acecoderv3_fine_grained_test_cases/outputs/first_1000_64"
+BASE_DIR="acecoderv3_fine_grained_test_cases/outputs/remaining"
 
 # -------------------------
 # 第1轮初始输入文件（来自 step2.2）
 # -------------------------
-INPUT_FILE="${BASE_DIR}/step2.2_eval2.jsonl"
+INPUT_FILE="${BASE_DIR}/step2.2_merged_eval.jsonl"
 
 # -------------------------
 # 主循环
@@ -68,10 +68,10 @@ for ROUND in $(seq 1 $NUM_ROUNDS); do
         "${BASE_DIR}/round_${ROUND}/step3.5_gen_tests_results_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    echo "👉 Step 3.7: Evaluate final tests"
-    python acecoderv3_fine_grained_test_cases/step3.7_eval.py \
-        "${BASE_DIR}/round_${ROUND}/step3.6_parsing_tests_round_${ROUND}.jsonl" \
-        --round "${ROUND}" --num_proc "${NUM_PROC}"
+    # echo "👉 Step 3.7: Evaluate final tests"
+    # python acecoderv3_fine_grained_test_cases/step3.7_eval.py \
+    #     "${BASE_DIR}/round_${ROUND}/step3.6_parsing_tests_round_${ROUND}.jsonl" \
+    #     --round "${ROUND}" --num_proc "${NUM_PROC}"
 
     # 为下一轮准备输入文件
     INPUT_FILE="${BASE_DIR}/round_${ROUND}/step3.7_eval_round_${ROUND}.jsonl"
