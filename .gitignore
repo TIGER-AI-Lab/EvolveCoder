@@ -212,3 +212,6 @@ __marimo__/
 /test*
 /*.jsonl
 **/__pycache__/
+
+# Human case study output files
+human_study.xlsx
