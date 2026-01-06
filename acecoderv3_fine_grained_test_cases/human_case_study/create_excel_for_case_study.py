@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
 """
-Create an Excel workbook where each sheet corresponds to one Hugging Face dataset.
-For each dataset:
-  - randomly sample 10 examples
-  - for each example randomly sample 10 tests
-Formatting is optimized for human annotation:
-  - Vertical layout per example:
-      ID (single row)
-      QUESTION (multi-line cell)
-      TESTS (10 rows, one per test)
-      (blank spacer rows)
-  - Wide question column, wrapped text, frozen header space.
+Create an Excel workbook where each sheet corresponds to one QUESTION ID.
+For each question ID:
+  - verify the ID exists in EVERY provided Hugging Face dataset repo (else raise)
+  - display the QUESTION once (from any repo; assumed identical across rounds)
+  - display TEST CASES grouped by repo (round)
 
 Requirements:
   pip install datasets openpyxl
 
 Usage:
-  1) Fill HF_URLS below
-  2) python hf_to_excel.py
+  1) Fill HF_URLS and QUESTION_IDS below
+  2) python hf_to_excel_by_id.py
 """
 
 from __future__ import annotations
 
-import random
 import re
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from datasets import load_dataset
 from openpyxl import Workbook
@@ -37,21 +30,34 @@ from openpyxl.utils import get_column_letter
 # ----------------------------
 HF_URLS = [
     "chiruan/acecoderv3_round0",
-    "chiruan/acecoderv3_round1"
+    "chiruan/acecoderv3_round1",
+    "chiruan/acecoderv3_round2",
+    "chiruan/acecoderv3_round3",
 ]
 
-OUTPUT_XLSX = "human_study.xlsx"
+# Provide the question IDs you want to export (must exist in every repo)
+QUESTION_IDS = [
+    "TACO_4591",
+    "primeintellect_211",
+    "APPS_527",
+    "TACO_10981",
+    "contests_2890",
+    "primeintellect_398",
+    "APPS_1112",
+    "contests_989",
+    "TACO_1721",
+    "codeforces_1069",
+]
+
+OUTPUT_XLSX = "human_study_by_id.xlsx"
 SPLIT_PREFERENCE = ["train", "validation", "test"]  # first available will be used
-N_QUESTIONS = 10
-N_TESTS = 10
-RANDOM_SEED = 42  # set None for non-reproducible sampling
 
 # Excel cell hard limit is 32,767 characters; truncate to avoid write errors.
 EXCEL_CELL_CHAR_LIMIT = 32767
 TRUNCATE_QUESTION_TO = 30000
 
 # Layout
-SPACER_ROWS_BETWEEN_EXAMPLES = 2
+SPACER_ROWS_BETWEEN_REPOS = 1
 
 
 # ----------------------------
@@ -109,30 +115,45 @@ def truncate_for_excel(s: str, limit: int) -> str:
     return s[:limit] + "\n\n[TRUNCATED]"
 
 
-def sample_indices(n_total: int, n_sample: int, rng: random.Random) -> List[int]:
-    if n_total <= 0:
-        return []
-    if n_total <= n_sample:
-        return list(range(n_total))
-    return rng.sample(range(n_total), n_sample)
-
-
-def sample_tests(tests: List[str], n: int, rng: random.Random) -> List[str]:
-    if not tests:
-        return []
-    if len(tests) <= n:
-        return tests
-    return rng.sample(tests, n)
-
-
 def set_col_width(ws, col: int, width: float):
     ws.column_dimensions[get_column_letter(col)].width = width
 
 
-def style_cell(cell, wrap=True, valign="top", bold=False):
+def style_cell(cell, wrap=True, valign="top", bold=False, font: Font | None = None):
     cell.alignment = Alignment(wrap_text=wrap, vertical=valign)
     if bold:
-        cell.font = Font(bold=True)
+        cell.font = Font(bold=True) if font is None else Font(**{**font.copy().__dict__, "bold": True})
+    elif font is not None:
+        cell.font = font
+
+
+def parse_round_label(url: str) -> str:
+    """
+    Best-effort label like 'round0' from repo name.
+    e.g. 'chiruan/acecoderv3_round1' -> 'round1'
+    """
+    m = re.search(r"(round\d+)", url, flags=re.IGNORECASE)
+    if m:
+        return m.group(1).lower()
+    # fallback to last path component
+    return url.split("/")[-1]
+
+
+def build_id_index(ds) -> Dict[str, int]:
+    """
+    Build a mapping: id -> row index in the dataset.
+    Assumes 'id' is unique within a split.
+    """
+    idx: Dict[str, int] = {}
+    # Iterating through ds can be slow but is simplest and robust.
+    for i, ex in enumerate(ds):
+        ex_id = ex.get("id", None)
+        if ex_id is None:
+            continue
+        # keep first occurrence if duplicates exist
+        if ex_id not in idx:
+            idx[ex_id] = i
+    return idx
 
 
 # ----------------------------
@@ -141,21 +162,11 @@ def style_cell(cell, wrap=True, valign="top", bold=False):
 def main():
     if not HF_URLS:
         raise ValueError("HF_URLS is empty. Add your Hugging Face dataset IDs to HF_URLS.")
+    if not QUESTION_IDS:
+        raise ValueError("QUESTION_IDS is empty. Add at least one question ID.")
 
-    rng = random.Random(RANDOM_SEED) if RANDOM_SEED is not None else random.Random()
-
-    wb = Workbook()
-    # Remove default sheet
-    wb.remove(wb.active)
-
-    used_sheet_names: set[str] = set()
-
-    # Styles
-    label_font = Font(bold=True)
-    label_fill = PatternFill("solid", fgColor="F2F2F2")
-    mono_font = Font(name="Consolas")  # nice for tests
-    thin_sep_fill = PatternFill("solid", fgColor="FFFFFF")
-
+    # Load all datasets once, build id->row index for each
+    datasets_info: List[Tuple[str, str, object, Dict[str, int]]] = []
     for url in HF_URLS:
         ds, split = load_one_dataset(url)
 
@@ -167,101 +178,113 @@ def main():
                 f"Found columns: {ds.column_names}"
             )
 
-        raw_sheet = f"{url.replace('/', '__')}__{split}"
-        sheet_name = safe_sheet_name(raw_sheet, used_sheet_names)
+        id_to_row = build_id_index(ds)
+        datasets_info.append((url, split, ds, id_to_row))
+
+    # Validate every requested ID exists in every repo (fail fast)
+    for qid in QUESTION_IDS:
+        for (url, split, _ds, id_to_row) in datasets_info:
+            if qid not in id_to_row:
+                raise ValueError(
+                    f"ID '{qid}' not found in dataset '{url}' (split '{split}'). "
+                    f"Please check the ID list or the dataset split."
+                )
+
+    # Create workbook
+    wb = Workbook()
+    wb.remove(wb.active)
+    used_sheet_names: set[str] = set()
+
+    # Styles
+    label_fill = PatternFill("solid", fgColor="F2F2F2")
+    header_fill = PatternFill("solid", fgColor="D9E1F2")
+    mono_font = Font(name="Consolas")
+    bold_font = Font(bold=True)
+
+    # For each question id, create one sheet
+    for qid in QUESTION_IDS:
+        sheet_name = safe_sheet_name(qid, used_sheet_names)
         ws = wb.create_sheet(title=sheet_name)
 
-        # Layout: two columns: A=Label, B=Content
-        set_col_width(ws, 1, 14)   # label
-        set_col_width(ws, 2, 120)  # content (wide for question/tests)
+        # Two columns: A=Label, B=Content
+        set_col_width(ws, 1, 18)
+        set_col_width(ws, 2, 140)
 
-        # Optional: header note at top
-        ws["A1"] = "Dataset"
-        ws["B1"] = f"{url} (split: {split})"
+        # Top info
+        ws["A1"] = "Question ID"
+        ws["B1"] = truncate_for_excel(qid, EXCEL_CELL_CHAR_LIMIT)
         ws["A2"] = "Instructions"
-        ws["B2"] = "Annotate top-to-bottom. Each example: ID → QUESTION → TESTS. Use spacer rows between examples."
+        ws["B2"] = "Top-to-bottom: QUESTION, then TESTS grouped by repo/round."
         for r in (1, 2):
-            ws[f"A{r}"].font = label_font
-            ws[f"A{r}"].fill = label_fill
-            ws[f"A{r}"].alignment = Alignment(vertical="top", wrap_text=True)
-            ws[f"B{r}"].alignment = Alignment(vertical="top", wrap_text=True)
+            a = ws[f"A{r}"]
+            b = ws[f"B{r}"]
+            a.fill = label_fill
+            a.font = bold_font
+            style_cell(a, wrap=True, valign="top")
+            style_cell(b, wrap=True, valign="top")
 
         ws.freeze_panes = "A3"
+        cur_row = 4
 
-        cur_row = 4  # start writing examples below header
+        # Pull the question from the first repo (assumed identical across rounds)
+        first_url, first_split, first_ds, first_map = datasets_info[0]
+        first_ex = first_ds[int(first_map[qid])]
+        question = truncate_for_excel(first_ex.get("question", ""), TRUNCATE_QUESTION_TO)
 
-        # Sample examples
-        q_idxs = sample_indices(len(ds), N_QUESTIONS, rng)
+        # QUESTION block
+        ws.cell(row=cur_row, column=1, value="QUESTION").fill = label_fill
+        ws.cell(row=cur_row, column=1).font = bold_font
+        q_cell = ws.cell(row=cur_row, column=2, value=question)
+        style_cell(ws.cell(row=cur_row, column=1), wrap=True, valign="top")
+        style_cell(q_cell, wrap=True, valign="top")
+        ws.row_dimensions[cur_row].height = 260
+        cur_row += 2  # one blank row after question
 
-        for ex_i, idx in enumerate(q_idxs, start=1):
-            ex = ds[int(idx)]
-            ex_id = truncate_for_excel(ex.get("id", ""), EXCEL_CELL_CHAR_LIMIT)
-            question = truncate_for_excel(ex.get("question", ""), TRUNCATE_QUESTION_TO)
+        # Tests grouped by repo
+        for (url, split, ds, id_to_row) in datasets_info:
+            round_label = parse_round_label(url)
+            ex = ds[int(id_to_row[qid])]
 
             tests = ex.get("tests", []) or []
             tests = [truncate_for_excel(t, EXCEL_CELL_CHAR_LIMIT) for t in tests]
-            chosen_tests = sample_tests(tests, N_TESTS, rng)
 
-            # --- ID row ---
-            ws.cell(row=cur_row, column=1, value=f"ID ({ex_i})")
-            ws.cell(row=cur_row, column=2, value=ex_id)
-            for c in (1, 2):
-                cell = ws.cell(row=cur_row, column=c)
-                style_cell(cell, wrap=True, valign="top", bold=(c == 1))
-                if c == 1:
-                    cell.fill = label_fill
+            # Repo header row
+            ws.cell(row=cur_row, column=1, value="REPO").fill = header_fill
+            ws.cell(row=cur_row, column=1).font = bold_font
+            ws.cell(row=cur_row, column=2, value=f"{url}  (split: {split})  [{round_label}]")
+            style_cell(ws.cell(row=cur_row, column=1), wrap=True, valign="top")
+            style_cell(ws.cell(row=cur_row, column=2), wrap=True, valign="top")
             cur_row += 1
 
-            # --- QUESTION row ---
-            ws.cell(row=cur_row, column=1, value="QUESTION")
-            q_cell = ws.cell(row=cur_row, column=2, value=question)
-            # Make question visually roomy
-            ws.row_dimensions[cur_row].height = 220  # adjust as desired
-            for c in (1, 2):
-                cell = ws.cell(row=cur_row, column=c)
-                style_cell(cell, wrap=True, valign="top", bold=(c == 1))
-                if c == 1:
-                    cell.fill = label_fill
+            # TESTS header row
+            ws.cell(row=cur_row, column=1, value="TESTS").fill = label_fill
+            ws.cell(row=cur_row, column=1).font = bold_font
+            ws.cell(row=cur_row, column=2, value=f"{len(tests)} test cases (one per row below)")
+            style_cell(ws.cell(row=cur_row, column=1), wrap=True, valign="top")
+            style_cell(ws.cell(row=cur_row, column=2), wrap=True, valign="top")
             cur_row += 1
 
-            # --- TESTS header row ---
-            ws.cell(row=cur_row, column=1, value="TESTS")
-            t_head = ws.cell(row=cur_row, column=2, value=f"{len(chosen_tests)} sampled test cases (one per row below)")
-            for c in (1, 2):
-                cell = ws.cell(row=cur_row, column=c)
-                style_cell(cell, wrap=True, valign="top", bold=(c == 1))
-                if c == 1:
-                    cell.fill = label_fill
-            cur_row += 1
-
-            # --- Each test in its own row ---
-            if not chosen_tests:
+            # Each test per row
+            if not tests:
                 ws.cell(row=cur_row, column=1, value="test_1")
                 c2 = ws.cell(row=cur_row, column=2, value="")
-                ws.cell(row=cur_row, column=1).fill = thin_sep_fill
-                style_cell(ws.cell(row=cur_row, column=1), wrap=False, valign="top", bold=False)
+                style_cell(ws.cell(row=cur_row, column=1), wrap=False, valign="top")
                 c2.font = mono_font
-                style_cell(c2, wrap=True, valign="top", bold=False)
+                style_cell(c2, wrap=True, valign="top")
+                ws.row_dimensions[cur_row].height = 50
                 cur_row += 1
             else:
-                for j, t in enumerate(chosen_tests, start=1):
+                for j, t in enumerate(tests, start=1):
                     ws.cell(row=cur_row, column=1, value=f"test_{j}")
                     c2 = ws.cell(row=cur_row, column=2, value=t)
-                    # Style
-                    lcell = ws.cell(row=cur_row, column=1)
-                    style_cell(lcell, wrap=False, valign="top", bold=False)
-                    lcell.fill = thin_sep_fill
-
+                    style_cell(ws.cell(row=cur_row, column=1), wrap=False, valign="top")
                     c2.font = mono_font
-                    style_cell(c2, wrap=True, valign="top", bold=False)
-
-                    # Optional: give tests some breathing room
+                    style_cell(c2, wrap=True, valign="top")
                     ws.row_dimensions[cur_row].height = 60
                     cur_row += 1
 
-            # Spacer rows between examples
-            for _ in range(SPACER_ROWS_BETWEEN_EXAMPLES):
-                cur_row += 1
+            # Spacer between repos
+            cur_row += SPACER_ROWS_BETWEEN_REPOS
 
     wb.save(OUTPUT_XLSX)
     print(f"Wrote Excel file: {OUTPUT_XLSX}")
