@@ -49,21 +49,11 @@ def group_by_pass_pattern(test_pass_matrix, filtered_indexes):
     return groups
 
 
-# def get_duplicate_indexes(groups):
-#     duplicate_indexes = set()
-#     for _, indices in groups.items():
-#         if len(indices) > 3:
-#             # kept = random.choice(indices)
-#             kept = random.sample(indices, 3)
-#             duplicate_indexes |= {idx for idx in indices if idx != kept}
-#     return duplicate_indexes
-
-
 def get_duplicate_indexes(groups):
     duplicate_indexes = set()
     for _, indices in groups.items():
-        if len(indices) > 3:
-            kept = random.sample(indices, 3)
+        if len(indices) > 5:
+            kept = random.sample(indices, 5)
             duplicate_indexes |= {idx for idx in indices if idx not in kept}
     return duplicate_indexes
 
@@ -131,7 +121,9 @@ def main(
     num_proc: int = 1,
     output_dir: str = None,
     round: int = 1,
-    overwrite: bool = False
+    overwrite: bool = False,
+    min_test_cases: int = 5,
+    max_perfect_solutions: int = 60
 ):
     assert os.path.exists(file_path), f"File {file_path} does not exist."
     output_dir = output_dir or Path(file_path).parent
@@ -147,25 +139,45 @@ def main(
     
     print(f"\n=== Before Filtering ===")
     print(f"Average number of test cases: {avg_tests_before:.2f}")
+    print(f"Total items: {len(dataset)}")
     
     dataset = dataset.map(
         filter_test_cases,
         num_proc=num_proc,
         desc="Filtering tests",
+        writer_batch_size=100,  # 添加这个参数
+        keep_in_memory=False,   # 添加这个参数
     )
     
-    num_before_removal = len(dataset)
+    num_before_min_filter = len(dataset)
     dataset = dataset.filter(
-        lambda x: len(x['filtered_tests']) > 0,
+        lambda x: len(x['filtered_tests']) >= min_test_cases,
         num_proc=num_proc,
-        desc="Removing items with empty filtered_tests"
+        desc=f"Removing items with fewer than {min_test_cases} test cases"
     )
-    num_after_removal = len(dataset)
-    print(f"Removed {num_before_removal - num_after_removal} items with no valid test cases")
+    num_after_min_filter = len(dataset)
+    print(f"Removed {num_before_min_filter - num_after_min_filter} items with fewer than {min_test_cases} test cases")
+    
+    def count_perfect_solutions(item):
+        perfect_count = sum(
+            1 for eval_result in item['gen_result']['eval_results']
+            if eval_result.get('pass_rate', 0) == 1.0
+        )
+        return perfect_count <= max_perfect_solutions
+    
+    num_before_perfect_filter = len(dataset)
+    dataset = dataset.filter(
+        count_perfect_solutions,
+        num_proc=num_proc,
+        desc=f"Removing items with more than {max_perfect_solutions} perfect solutions"
+    )
+    num_after_perfect_filter = len(dataset)
+    print(f"Removed {num_before_perfect_filter - num_after_perfect_filter} items with more than {max_perfect_solutions} perfect solutions")
     
     num_tests_after = [len(x['filtered_tests']) for x in tqdm(dataset, desc="Calculating avg test cases after filtering")]
     avg_tests_after = np.mean(num_tests_after)
     print(f"\n=== After Filtering ===")
+    print(f"Total items: {len(dataset)}")
     print(f"Average number of test cases: {avg_tests_after:.2f}")
     print(f"\n=== Difference ===")
     print(f"Test cases filtered: {avg_tests_before - avg_tests_after:.2f} ({(avg_tests_before - avg_tests_after) / avg_tests_before * 100:.1f}%)")
