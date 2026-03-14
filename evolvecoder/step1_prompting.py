@@ -9,7 +9,7 @@ from tqdm.asyncio import tqdm
 from pathlib import Path
 from datasets import concatenate_datasets
 
-from acecoderv3_fine_grained_test_cases.utils import (
+from evolvecoder.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_jsonl,
@@ -18,7 +18,7 @@ from acecoderv3_fine_grained_test_cases.utils import (
     hash_messages,
     pretty_name,
 )
-from acecoderv3_fine_grained_test_cases.openai_utils import generate_with_retry, OpenAIAsyncClient
+from evolvecoder.openai_utils import generate_with_retry, OpenAIAsyncClient
 
 PROMPT_TEMPLATE_RAW = """system:
 You are the latest and best bot aimed at transforming some code snippet into a very challenging LeetCode-style question intended for advanced CS university students and experienced software engineers. You will be provided with a prompt for writing code, along with a reference program that attempts to answer the question. Please complete the following for me:

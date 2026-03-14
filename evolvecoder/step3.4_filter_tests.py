@@ -9,7 +9,7 @@ from fire import Fire
 from tqdm import tqdm
 from pathlib import Path
 
-from acecoderv3_fine_grained_test_cases.utils import (
+from evolvecoder.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_jsonl,
@@ -167,5 +167,5 @@ if __name__ == "__main__":
 
 
 """
-python acecoderv3_fine_grained_test_cases/step3.5_filter_tests.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --num_proc 16 --round 1
+python evolvecoder/step3.5_filter_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --num_proc 16 --round 1
 """

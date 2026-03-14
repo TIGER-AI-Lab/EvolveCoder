@@ -16,7 +16,7 @@ from pathlib import Path
 from datasets import concatenate_datasets
 from evalplus.sanitize import sanitize, code_extract
 
-from acecoderv3_fine_grained_test_cases.utils import (
+from evolvecoder.utils import (
     parse_incomplete_json,
     append_jsonl,
     load_cache,
@@ -368,5 +368,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3_fine_grained_test_cases/step3.6_gen_tests.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step3.5_filter_tests_round_1.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
+python evolvecoder/step3.6_gen_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.5_filter_tests_round_1.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
 """

@@ -2,8 +2,8 @@ import fire
 import json
 import datasets
 import random
-from acecoderv3_fine_grained_test_cases.code_eval import eval_codes, parse_code
-from acecoderv3_fine_grained_test_cases.utils import print_statistics
+from evolvecoder.code_eval import eval_codes, parse_code
+from evolvecoder.utils import print_statistics
 from typing import List, Union, Optional
 from pathlib import Path
 import numpy as np
@@ -291,17 +291,17 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl
+python evolvecoder/step2.2_eval.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl
 
 # With custom batch size and timeout (auto-restart enabled by default)
-python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --batch_size=50 --batch_timeout=1800
+python evolvecoder/step2.2_eval.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --batch_size=50 --batch_timeout=1800
 
 # Disable auto-restart (manual restart required)
-python acecoderv3_fine_grained_test_cases/step2.2_eval.py input.jsonl --auto_restart=False
+python evolvecoder/step2.2_eval.py input.jsonl --auto_restart=False
 
 # Force overwrite (clear cache)
-python acecoderv3_fine_grained_test_cases/step2.2_eval.py acecoderv3_fine_grained_test_cases/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --overwrite=True
+python evolvecoder/step2.2_eval.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step2.1_gen_merged_output.jsonl --overwrite=True
 
 # Example with 30 minute timeout per batch and auto-restart
-python acecoderv3_fine_grained_test_cases/step2.2_eval.py input.jsonl --batch_timeout=1800 --auto_restart=True
+python evolvecoder/step2.2_eval.py input.jsonl --batch_timeout=1800 --auto_restart=True
 """
