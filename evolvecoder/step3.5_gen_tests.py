@@ -368,5 +368,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python evolvecoder/step3.6_gen_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.5_filter_tests_round_1.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
+python evolvecoder/step3.5_gen_tests.py evolvecoder/outputs/experiment/gpt_4.1_mini/step3.4_filter_tests_round_1.jsonl --round 1 --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
 """

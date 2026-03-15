@@ -229,7 +229,7 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python acecoderv3/step2.1_vllm_gen.py acecoderv3/outputs/APPS/gpt_4.1_mini/step1.1_parsing.jsonl \
+python evolvecoder/step2.1_vllm_gen.py evolvecoder/outputs/APPS/gpt_4.1_mini/step1.1_parsing.jsonl \
     --start_idx=0 \
     --end_idx=50 \
     --save_batch_size=5 \

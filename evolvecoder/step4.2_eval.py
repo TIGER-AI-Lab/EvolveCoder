@@ -127,6 +127,6 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python evolvecoder/step4.2_eval.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step4.1_filter_round_1.jsonl --round 1
+python evolvecoder/step4.2_eval.py evolvecoder/outputs/experiment/gpt_4.1_mini/step4.1_filter_round_1.jsonl --round 1
 """
 

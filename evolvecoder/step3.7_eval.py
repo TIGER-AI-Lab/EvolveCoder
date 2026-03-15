@@ -285,17 +285,17 @@ if __name__ == "__main__":
     fire.Fire(main)
 
 """
-python evolvecoder/step3.8_eval.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.7_parsing_tests_round_1.jsonl --round 1
+python evolvecoder/step3.7_eval.py evolvecoder/outputs/experiment/gpt_4.1_mini/step3.6_parsing_tests_round_1.jsonl --round 1
 
 # With custom batch size and timeout (auto-restart enabled by default)
-python evolvecoder/step3.8_eval.py input.jsonl --round 1 --batch_size=50 --batch_timeout=1800
+python evolvecoder/step3.7_eval.py input.jsonl --round 1 --batch_size=50 --batch_timeout=1800
 
 # Disable auto-restart (manual restart required)
-python evolvecoder/step3.8_eval.py input.jsonl --round 1 --auto_restart=False
+python evolvecoder/step3.7_eval.py input.jsonl --round 1 --auto_restart=False
 
 # Force overwrite (clear cache)
-python evolvecoder/step3.8_eval.py input.jsonl --round 1 --overwrite=True
+python evolvecoder/step3.7_eval.py input.jsonl --round 1 --overwrite=True
 
 # Example with 30 minute timeout per batch and auto-restart
-python evolvecoder/step3.8_eval.py input.jsonl --round 1 --batch_timeout=1800 --auto_restart=True
+python evolvecoder/step3.7_eval.py input.jsonl --round 1 --batch_timeout=1800 --auto_restart=True
 """

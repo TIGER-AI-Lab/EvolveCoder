@@ -93,5 +93,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step1.1_parsing.py acecoderv3/outputs/APPS/gpt_4.1_mini/step1_prompting_results.jsonl --num_proc 1
+python evolvecoder/step1.1_parsing.py evolvecoder/outputs/APPS/gpt_4.1_mini/step1_prompting_results.jsonl --num_proc 1
 """

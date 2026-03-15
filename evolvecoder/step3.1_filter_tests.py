@@ -145,5 +145,5 @@ if __name__ == "__main__":
 
 
 """
-python evolvecoder/step3.1_filter_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step2.2_eval_Qwen3_32B_seed42_0_81.jsonl --num_proc 16 --round 1
+python evolvecoder/step3.1_filter_tests.py evolvecoder/outputs/experiment/gpt_4.1_mini/step2.2_eval_Qwen3_32B_seed42_0_81.jsonl --num_proc 16 --round 1
 """

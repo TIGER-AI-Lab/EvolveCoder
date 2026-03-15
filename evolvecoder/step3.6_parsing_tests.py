@@ -93,5 +93,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python evolvecoder/step3.7_parsing_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.6_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
+python evolvecoder/step3.6_parsing_tests.py evolvecoder/outputs/experiment/gpt_4.1_mini/step3.5_gen_tests_results_round_1.jsonl --round 1 --num_proc 1
 """

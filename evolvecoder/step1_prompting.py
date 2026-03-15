@@ -421,5 +421,5 @@ if __name__ == "__main__":
     Fire(main)
 
 """
-python acecoderv3/step1_prompting.py --sub_dataset_name APPS --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
+python evolvecoder/step1_prompting.py --sub_dataset_name APPS --max_samples 2 --model_name gpt-4.1-mini --save_batch_size 1 --max_concurrent 1 --batch_delay 2.0
 """

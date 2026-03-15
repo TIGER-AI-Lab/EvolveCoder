@@ -167,5 +167,5 @@ if __name__ == "__main__":
 
 
 """
-python evolvecoder/step3.5_filter_tests.py evolvecoder/outputs/all_20_round1/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --num_proc 16 --round 1
+python evolvecoder/step3.4_filter_tests.py evolvecoder/outputs/experiment/gpt_4.1_mini/step3.4_eval_combined_tests_round_1.jsonl --num_proc 16 --round 1
 """
