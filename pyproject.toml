@@ -1,5 +1,5 @@
 [project]
-name = "acecoderv2"
+name = "evolvecoder"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -16,7 +16,7 @@ dependencies = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["acecoderv2", "acecoderv3_fine_grained_test_cases"]
+include = ["evolvecoder"]
 exclude = ["tests*", "eval"]
 
 [tool.uv.sources]
