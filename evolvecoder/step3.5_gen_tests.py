@@ -28,7 +28,7 @@ from evolvecoder.utils import (
     hash_messages,
     pretty_name,
 )
-from acecoderv2.synthesizer.openai_utils import generate_with_retry, OpenAIAsyncClient
+from evolvecoder.synthesizer.openai_utils import generate_with_retry, OpenAIAsyncClient
 
 PROMPT_TEMPLATE_RAW = """system:
 You are an advanced AI system specialized in generating *differentiating test cases* that expose logical and behavioral differences between similar programs.
