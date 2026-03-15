@@ -44,11 +44,6 @@ for ROUND in $(seq 1 $NUM_ROUNDS); do
         "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.2_gen_tests_results_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    # echo "👉 Step 3.4: Evaluate combined tests"
-    # python evolvecoder/step3.4_eval_combined_tests.py \
-    #     "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.3_parsing_tests_round_${ROUND}.jsonl" \
-    #     --round "${ROUND}" --num_proc "${NUM_PROC}"
-
     echo "👉 Step 3.4: Filter evaluated tests"
     python evolvecoder/step3.4_filter_tests.py \
         "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.3_parsing_tests_round_${ROUND}.jsonl" \
@@ -68,10 +63,10 @@ for ROUND in $(seq 1 $NUM_ROUNDS); do
         "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.5_gen_tests_results_round_${ROUND}.jsonl" \
         --round "${ROUND}" --num_proc "${NUM_PROC}"
 
-    # echo "👉 Step 3.7: Evaluate final tests"
-    # python evolvecoder/step3.7_eval.py \
-    #     "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.6_parsing_tests_round_${ROUND}.jsonl" \
-    #     --round "${ROUND}" --num_proc "${NUM_PROC}"
+    echo "👉 Step 3.7: Evaluate final tests"
+    python evolvecoder/step3.7_eval.py \
+        "${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.6_parsing_tests_round_${ROUND}.jsonl" \
+        --round "${ROUND}" --num_proc "${NUM_PROC}"
 
     # 为下一轮准备输入文件
     INPUT_FILE="${BASE_DIR}/gpt_4.1_mini/round_${ROUND}/step3.7_eval_round_${ROUND}.jsonl"
