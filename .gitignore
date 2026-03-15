@@ -215,3 +215,5 @@ __marimo__/
 
 # Human case study output files
 human_study.xlsx
+
+/acecoderv3_fine_grained_test_cases/
