@@ -213,7 +213,5 @@ __marimo__/
 /*.jsonl
 **/__pycache__/
 
-# Untracked but keep local
-/acecoderv2
-/acecoderv3
-/advsersial_prompt
+# Human case study output files
+human_study.xlsx
