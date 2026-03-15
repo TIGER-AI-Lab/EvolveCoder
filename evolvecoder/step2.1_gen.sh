@@ -1,5 +1,5 @@
 #!/bin/bash
-DATA=acecoderv3/outputs/all_20/gpt_4.1_mini/step1.1_parsing.jsonl
+DATA=evolvecoder/outputs/experiment/gpt_4.1_mini/step1.1_parsing.jsonl
 model_name_or_path='Qwen/Qwen3-4B'
 echo "CUDA_VISIBLE_DEVICES: $CUDA_VISIBLE_DEVICES"
 
@@ -70,7 +70,7 @@ for (( proc_idx=0; proc_idx<NUM_PROCESSES; proc_idx++ )); do
     echo "  top_p: ${top_p}"
     echo ""
 
-    CUDA_VISIBLE_DEVICES=$gpu_list python acecoderv3/step2.1_vllm_gen.py "${DATA}" \
+    CUDA_VISIBLE_DEVICES=$gpu_list python evolvecoder/step2.1_vllm_gen.py "${DATA}" \
         --start_idx="${start}" \
         --end_idx="${end}" \
         --save_batch_size="${BSZ}" \
