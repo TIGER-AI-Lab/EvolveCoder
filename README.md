@@ -10,11 +10,9 @@
 
 We release **EvolveCoder-22K**, a large-scale coding RL dataset built with this pipeline.
 
-![Pipeline](main_graph.png)
-
-## Dataset Analysis
-
-![Dataset Analysis](bar_line_chart.jpg)
+<p align="center">
+  <img src="main_graph.png" width="75%">
+</p>
 
 ## Dataset
 
@@ -189,15 +187,6 @@ python evolvecoder/step4.2_eval.py <input_file> --num_proc 64
 ```
 
 ---
-
-## Evaluation
-
-```bash
-mkdir -p eval
-cd eval
-git clone -b reasoning https://github.com/jdf-prog/LiveCodeBench
-git clone https://github.com/jdf-prog/AceReasonEvalKit.git
-```
 
 ## Citation
 
